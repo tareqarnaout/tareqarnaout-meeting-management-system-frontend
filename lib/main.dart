@@ -8,6 +8,7 @@ import 'screens/create_meeting_screen.dart';
 import 'screens/review_sign_screen.dart';
 import 'screens/decision_graph_screen.dart';
 import 'screens/archive_screen.dart';
+import 'screens/user_management_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -55,6 +56,11 @@ final GoRouter _router = GoRouter(
           path: '/archive',
           builder: (BuildContext context, GoRouterState state) =>
               const ArchiveScreen(),
+        ),
+        GoRoute(
+          path: '/users',
+          builder: (BuildContext context, GoRouterState state) =>
+              const UserManagementScreen(),
         ),
       ],
     ),

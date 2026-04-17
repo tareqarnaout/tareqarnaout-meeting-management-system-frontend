@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../constants/app_theme.dart';
+import '../services/auth_service.dart';
 
 class SidebarItem {
   final String label;
   final IconData icon;
   final String route;
+  final bool adminOnly;
 
   const SidebarItem({
     required this.label,
     required this.icon,
     required this.route,
+    this.adminOnly = false,
   });
 }
 
-class Sidebar extends StatelessWidget {
+class Sidebar extends StatefulWidget {
   final String currentRoute;
 
   const Sidebar({super.key, required this.currentRoute});
@@ -29,10 +32,37 @@ class Sidebar extends StatelessWidget {
         label: 'Meetings Archive',
         icon: Icons.archive_outlined,
         route: '/archive'),
+    SidebarItem(
+        label: 'User Management',
+        icon: Icons.admin_panel_settings_outlined,
+        route: '/users',
+        adminOnly: true),
   ];
 
   @override
+  State<Sidebar> createState() => _SidebarState();
+}
+
+class _SidebarState extends State<Sidebar> {
+  int? _roleId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRole();
+  }
+
+  Future<void> _loadRole() async {
+    final int? role = await AuthService().getRoleId();
+    if (mounted) setState(() => _roleId = role);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final List<SidebarItem> visibleItems = Sidebar.items
+        .where((SidebarItem item) => !item.adminOnly || _roleId == 1)
+        .toList();
+
     return Container(
       width: 240,
       decoration: BoxDecoration(
@@ -84,8 +114,8 @@ class Sidebar extends StatelessWidget {
           Divider(color: AppColors.border.withValues(alpha: 0.5), height: 1),
           const SizedBox(height: 12),
           // Nav items
-          ...items.map((SidebarItem item) {
-            final bool isActive = currentRoute == item.route;
+          ...visibleItems.map((SidebarItem item) {
+            final bool isActive = widget.currentRoute == item.route;
             return _NavItem(item: item, isActive: isActive);
           }),
           const Spacer(),
@@ -95,48 +125,69 @@ class Sidebar extends StatelessWidget {
   }
 }
 
-class _NavItem extends StatelessWidget {
+class _NavItem extends StatefulWidget {
   final SidebarItem item;
   final bool isActive;
 
   const _NavItem({required this.item, required this.isActive});
 
   @override
+  State<_NavItem> createState() => _NavItemState();
+}
+
+class _NavItemState extends State<_NavItem> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final bool isActive = widget.isActive;
+    final double offset = _isHovered && !isActive ? 6.0 : 0.0;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => context.go(item.route),
-          borderRadius: BorderRadius.circular(24),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isActive ? AppColors.sidebarActiveItem : Colors.transparent,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  item.icon,
-                  size: 18,
-                  color: isActive
-                      ? AppColors.sidebarActiveText
-                      : AppColors.sidebarText,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  item.label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => context.go(widget.item.route),
+            borderRadius: BorderRadius.circular(24),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              padding: EdgeInsets.only(
+                left: 14 + offset,
+                right: 14,
+                top: 10,
+                bottom: 10,
+              ),
+              decoration: BoxDecoration(
+                color: isActive ? AppColors.sidebarActiveItem : Colors.transparent,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    widget.item.icon,
+                    size: 18,
                     color: isActive
                         ? AppColors.sidebarActiveText
                         : AppColors.sidebarText,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Text(
+                    widget.item.label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                      color: isActive
+                          ? AppColors.sidebarActiveText
+                          : AppColors.sidebarText,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -52,8 +52,11 @@ class MeetingService {
   Future<bool> createMeeting(Meeting meeting) async {
     try {
       final response = await _api.post('/meetings/', meeting.toJson());
+      print('CREATE MEETING STATUS: ${response.statusCode}');
+      print('CREATE MEETING BODY: ${response.body}');
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
+      print('CREATE MEETING ERROR: $e');
       return false;
     }
   }
@@ -65,6 +68,35 @@ class MeetingService {
       return response.statusCode;
     } catch (e) {
       return 500;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getUsers() async {
+    try {
+      final response = await _api.get('/meetings/users');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Calls the BM25 search endpoint. Returns meeting IDs ranked by relevance,
+  /// or null if the request failed (so callers can fall back to local filtering).
+  Future<List<int>?> searchMeetings(String query) async {
+    try {
+      final response =
+          await _api.post('/meetings/search', {'query': query});
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+        return data.map((dynamic e) => e as int).toList();
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 }

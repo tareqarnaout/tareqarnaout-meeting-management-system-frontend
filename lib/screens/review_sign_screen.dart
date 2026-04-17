@@ -1,512 +1,351 @@
 import 'package:flutter/material.dart';
 import '../constants/app_theme.dart';
+import '../widgets/document_preview.dart';
+import '../widgets/wave_scroll_button.dart';
 
 class ReviewSignScreen extends StatelessWidget {
   const ReviewSignScreen({super.key});
+
+  static const DocumentPreviewData _mockData = DocumentPreviewData(
+    referenceNumber: '468/31/13/1082',
+    issueDate: '2025/10/22',
+    recipients: [
+      'الأستاذ الدكتور عميد الكلية المحترم',
+      'السادة أعضاء هيئة التدريس المحترمون',
+    ],
+    councilType: 'مجلس القسم',
+    sessionNumber: '19',
+    academicYear: '2025/2026',
+    meetingDate: '2025/10/20',
+    decisionNumber: '4',
+    decisionText:
+        'بناءً على مناقشة مجلس القسم لموضوع تحديث بروتوكولات السلامة في المختبرات، تقرر ما يلي:\n\n'
+        'أولاً: اعتماد متطلبات تخزين المواد الكيميائية الجديدة وتطبيقها فوراً في جميع المختبرات.\n\n'
+        'ثانياً: إلزام جميع العاملين في المختبرات بإكمال تدريب السلامة المحدّث قبل تاريخ 2025/11/15.\n\n'
+        'ثالثاً: تحديث خرائط مسارات الإخلاء الطارئ ونشرها في جميع المباني قبل 2025/11/1.\n\n'
+        'رابعاً: تخصيص مبلغ 12,000 دينار لصيانة وإصلاح المعدات المُعلّقة في تقرير الفحص السنوي.\n\n'
+        'خامساً: تكليف د. فاطمة الحسن بتنسيق جلسات التدريب على السلامة لطلبة الدراسات العليا الجدد.\n\n'
+        'سادساً: اعتماد نظام الإبلاغ الرقمي عن الحوادث عبر بوابة القسم الإلكترونية، على أن يتم تدريب جميع أعضاء هيئة التدريس على النظام قبل 2025/11/20.',
+    signatoryName: 'أ.د. عبدالله',
+    signatoryTitle: 'رئيس القسم',
+  );
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.pageBg,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Review & Sign Meeting Summary',
-                style: AppTextStyles.heading2),
-            const SizedBox(height: 4),
-            Text('Review the meeting details and provide your digital signature.',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            const SizedBox(height: 20),
-
-            // Alert banner
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFBEB),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFDE68A)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(Icons.warning_amber_rounded,
-                        size: 16, color: Color(0xFFF59E0B)),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Action Required: Your Signature Needed',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF92400E))),
-                        Text(
-                            'Please review the meeting summary and provide your digital approval or rejection.',
-                            style: TextStyle(
-                                fontSize: 12, color: const Color(0xFFB45309))),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+      child: Column(
+        children: [
+          // Document header bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+            color: const Color(0xFF3B5998),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.visibility_outlined,
+                    size: 16, color: Colors.white70),
+                const SizedBox(width: 8),
+                Text(
+                  'معاينة الوثيقة الرسمية — للمراجعة والتوقيع',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withValues(alpha: 0.9)),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
+          ),
 
-            // Two column layout
-            Row(
+          // Main content
+          Expanded(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Left - Meeting content
+                // Left — Document preview
                 Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Meeting header
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: AppDecorations.cardWithBorder,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Expanded(
-                                  child: Text('Department Safety Review',
-                                      style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.textPrimary)),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF59E0B)
-                                        .withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Text('Submitted for Approval',
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFFF59E0B))),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                _infoChip(Icons.calendar_today_outlined,
-                                    'October 15, 2025'),
-                                const SizedBox(width: 16),
-                                _infoChip(
-                                    Icons.category_outlined, 'Department'),
-                                const SizedBox(width: 16),
-                                _infoChip(
-                                    Icons.people_outline, '5 Attendees'),
-                              ],
-                            ),
-                          ],
+                  flex: 6,
+                  child: Container(
+                    color: const Color(0xFFE8EAF0),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(28),
+                      child: Center(
+                        child: DocumentPreview(
+                          data: _mockData,
+                          showPlaceholders: false,
                         ),
                       ),
-                      const SizedBox(height: 16),
-
-                      // Meeting Minutes
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: AppDecorations.cardWithBorder,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Meeting Minutes',
-                                style: AppTextStyles.heading3),
-                            const SizedBox(height: 16),
-                            _minutesSection(
-                              'Meeting Summary - Department Safety Review',
-                              [
-                                'Date: October 15, 2025 | Time: 2:00 PM - 4:30 PM',
-                                'Location: Conference Room B, Science Building',
-                              ],
-                            ),
-                            const Divider(height: 28),
-                            _minutesSection('Attendees:', [
-                              '1. Dr. Abdulla Guest (Chair) - Department Head',
-                              '2. Dr. Hassan Ali - Safety Officer',
-                              '3. Dr. Fatima Al-Rashid - Lab Director',
-                              '4. Dr. Mohammed Hassan - Research Lead',
-                              '5. Prof. Sarah Ahmed - Faculty Representative',
-                            ]),
-                            const Divider(height: 28),
-                            _minutesSection('Agenda Items:', []),
-                            const SizedBox(height: 8),
-                            _numberedItem('1', 'Laboratory Safety Protocol Updates', [
-                              'Current safety protocols were reviewed and identified areas for improvement.',
-                              'New chemical handling procedures to be implemented by November 2025.',
-                              'All lab personnel must complete updated safety training.',
-                            ]),
-                            const SizedBox(height: 12),
-                            _numberedItem('2', 'Emergency Response Procedures', [
-                              'Emergency evacuation routes have been updated, pending approval.',
-                              'New first-aid stations to be installed in all research labs.',
-                              'Emergency contact list to be updated by November 1, 2025.',
-                            ]),
-                            const SizedBox(height: 12),
-                            _numberedItem('3', 'Equipment Safety Inspections', [
-                              'Annual inspection completed for all major laboratory equipment.',
-                              'Replacement schedule approved for outdated safety equipment.',
-                              'Budget allocation of \$25,000 approved for necessary replacements.',
-                            ]),
-                            const SizedBox(height: 12),
-                            _numberedItem('4', 'Student Safety Training Program', [
-                              'Mandatory safety orientation for all new graduate students approved.',
-                              'Monthly safety audit to be implemented starting Q1 2026.',
-                              'Online safety training module development authorized.',
-                            ]),
-                            const Divider(height: 28),
-                            _minutesSection('Action Items:', [
-                              'Dr. Ali to update safety protocols by November 15, 2025.',
-                              'Dr. Al-Rashid to coordinate equipment replacements.',
-                              'Dr. Hassan to develop online training module.',
-                              'Dr. Ahmed to schedule student orientation sessions.',
-                            ]),
-                            const Divider(height: 28),
-                            const Text('Next Meeting: November 15, 2025 at 2:00 PM',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textPrimary)),
-                            const SizedBox(height: 4),
-                            Text('Minutes Prepared: October 15, 2025',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Signature Actions
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: AppDecorations.cardWithBorder,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Signature Actions',
-                                style: AppTextStyles.heading3),
-                            const SizedBox(height: 4),
-                            Text(
-                                'Review the meeting summary above and provide your decision.',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary)),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: () {
-                                      _showSignDialog(context);
-                                    },
-                                    icon: const Icon(Icons.check_circle_outline,
-                                        size: 18),
-                                    label: const Text('Approve & Sign'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.statusApproved,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
-                                      elevation: 0,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: () {},
-                                    icon: const Icon(Icons.cancel_outlined,
-                                        size: 18),
-                                    label: const Text('Request Revision'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.statusDraft,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
-                                      elevation: 0,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: 20),
 
-                // Right - Approval status
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    children: [
-                      // Approval Progress
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: AppDecorations.cardWithBorder,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Approval Progress',
-                                style: AppTextStyles.heading3),
-                            const SizedBox(height: 16),
-                            Center(
-                              child: SizedBox(
-                                width: 80,
-                                height: 80,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    CircularProgressIndicator(
-                                      value: 0.4,
-                                      strokeWidth: 6,
-                                      backgroundColor: AppColors.border,
-                                      valueColor:
-                                          const AlwaysStoppedAnimation<Color>(
-                                              AppColors.statusApproved),
-                                    ),
-                                    const Text('2/5',
-                                        style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.textPrimary)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Center(
-                              child: Text('2 of 5 signatures collected',
-                                  style: AppTextStyles.caption),
-                            ),
-                          ],
-                        ),
+                // Right — Review sidebar
+                SizedBox(
+                  width: 340,
+                  child: Container(
+                    color: Colors.white,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSidebarHeader(context),
+                          const SizedBox(height: 16),
+                          _buildActionRequiredBanner(),
+                          const SizedBox(height: 16),
+                          _buildSignatureProgress(),
+                          const SizedBox(height: 16),
+                          _buildRequiredSignatories(),
+                          const SizedBox(height: 16),
+                          _buildSignatureActions(context),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-
-                      // Required Signatories
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: AppDecorations.cardWithBorder,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Required Signatories',
-                                style: AppTextStyles.heading3),
-                            const SizedBox(height: 14),
-                            _signatoryRow('Dr. Abdulla Guest', true),
-                            _signatoryRow('Dr. Mohammed Al Ali', true),
-                            _signatoryRow('Dr. Fatima Al Hargan', false),
-                            _signatoryRow('Dr. Hassan Ahmed', false),
-                            _signatoryRow('Prof. Layla Al Salem', false),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Meeting Status
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: AppDecorations.cardWithBorder,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Meeting Status',
-                                style: AppTextStyles.heading3),
-                            const SizedBox(height: 14),
-                            _statusRow('Created',
-                                'Oct 15, 25, at 4:30 PM'),
-                            const SizedBox(height: 8),
-                            _statusRow('Submitted',
-                                'Oct 15, 25, at 4:45 PM'),
-                            const SizedBox(height: 8),
-                            _statusRow(
-                                'Status', 'Pending Approval'),
-                            const SizedBox(height: 8),
-                            _statusRow(
-                                'Last Updated', 'Oct 15, 25'),
-                          ],
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarHeader(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            InkWell(
+              onTap: () => Navigator.of(context).maybePop(),
+              child: const Icon(Icons.arrow_forward_ios,
+                  size: 14, color: AppColors.textSecondary),
+            ),
+            const SizedBox(width: 8),
+            const Text('مراجعة وتوقيع',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary)),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _infoChip(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: AppColors.textSecondary),
-        const SizedBox(width: 4),
-        Text(text,
-            style: const TextStyle(
-                fontSize: 12, color: AppColors.textSecondary)),
-      ],
-    );
-  }
-
-  Widget _minutesSection(String title, List<String> items) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary)),
-        if (items.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          ...items.map((String item) => Padding(
-                padding: const EdgeInsets.only(bottom: 3),
-                child: Text(item,
-                    style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                        height: 1.5)),
-              )),
-        ],
-      ],
-    );
-  }
-
-  Widget _numberedItem(
-      String number, String title, List<String> points) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('$number. $title',
-            style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary)),
         const SizedBox(height: 4),
-        ...points.map((String point) => Padding(
-              padding: const EdgeInsets.only(left: 16, bottom: 3),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('\u2022 ',
-                      style: TextStyle(
-                          fontSize: 12, color: AppColors.textSecondary)),
-                  Expanded(
-                    child: Text(point,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                            height: 1.5)),
-                  ),
-                ],
-              ),
-            )),
-      ],
-    );
-  }
-
-  Widget _signatoryRow(String name, bool signed) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: (signed
-                    ? AppColors.statusApproved
-                    : AppColors.textMuted)
-                .withValues(alpha: 0.1),
-            child: Text(
-              name.split(' ').map((String w) => w[0]).take(2).join(),
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                color: signed
-                    ? AppColors.statusApproved
-                    : AppColors.textMuted,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(name,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textPrimary)),
-          ),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: (signed
-                      ? AppColors.statusApproved
-                      : AppColors.statusPending)
-                  .withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              signed ? 'Signed' : 'Pending',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: signed
-                    ? AppColors.statusApproved
-                    : AppColors.statusPending,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statusRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 11, color: AppColors.textSecondary)),
-        Flexible(
-          child: Text(value,
-              style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary),
-              textAlign: TextAlign.end),
+        const Text(
+          'راجع الوثيقة ثم وقع أو اطلب تعديلاً',
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
       ],
+    );
+  }
+
+  Widget _buildActionRequiredBanner() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2E7D9E).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: const Color(0xFF2E7D9E).withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.error_outline,
+                  size: 16, color: AppColors.primaryTeal),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'إجراء مطلوب: توقيعك مطلوب',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryTeal),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'يرجى مراجعة الوثيقة والتوقيع الرقمي للموافقة.',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSignatureProgress() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('تقدم التوقيعات',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          const Text('2 من 5 وقعوا',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          const Text('40% مكتمل',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: 0.4,
+              minHeight: 8,
+              backgroundColor: AppColors.border.withValues(alpha: 0.3),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                  AppColors.primaryTeal),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequiredSignatories() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('الموقعون المطلوبون',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 14),
+          _signatoryRow('د. محمد العلي', true, '2025/10/22'),
+          _signatoryRow('د. فاطمة الحسن', true, '2025/10/23'),
+          _signatoryRow('د. أحمد الخالدي', false, null),
+          _signatoryRow('د. عبدالله قصف', false, null),
+          _signatoryRow('د. ليلى السالم', false, null),
+        ],
+      ),
+    );
+  }
+
+  Widget _signatoryRow(String name, bool signed, String? signedDate) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (signed
+                                ? AppColors.statusApproved
+                                : AppColors.statusPending)
+                            .withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            signed
+                                ? Icons.check_circle_outline
+                                : Icons.schedule,
+                            size: 12,
+                            color: signed
+                                ? AppColors.statusApproved
+                                : AppColors.statusPending,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            signed ? 'تم التوقيع' : 'قيد الانتظار',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: signed
+                                  ? AppColors.statusApproved
+                                  : AppColors.statusPending,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(name,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textPrimary)),
+                  ],
+                ),
+                if (signed && signedDate != null) ...[
+                  const SizedBox(height: 2),
+                  Text('وقع بتاريخ $signedDate',
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSignatureActions(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('إجراءات التوقيع',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 16),
+          WaveScrollButton(
+            text: 'توقيع رقمي والموافقة',
+            icon: Icons.check_circle_outline,
+            onPressed: () => _showSignDialog(context),
+            backgroundColor: AppColors.statusApproved,
+            expand: true,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          ),
+          const SizedBox(height: 10),
+          WaveScrollButton(
+            text: 'طلب تعديل',
+            icon: Icons.cancel_outlined,
+            onPressed: () {},
+            outlined: true,
+            expand: true,
+            foregroundColor: AppColors.statusDraft,
+            borderColor: AppColors.statusDraft,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          ),
+        ],
+      ),
     );
   }
 
@@ -517,30 +356,29 @@ class ReviewSignScreen extends StatelessWidget {
         return AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: const Text('Confirm Signature'),
+          title: const Text('تأكيد التوقيع',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           content: const Text(
-              'Are you sure you want to approve and sign this meeting summary? This action cannot be undone.'),
+              'هل أنت متأكد من الموافقة والتوقيع على هذا الملخص؟ لا يمكن التراجع عن هذا الإجراء.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
+              child: const Text('إلغاء'),
             ),
-            ElevatedButton(
+            WaveScrollButton(
+              text: 'تأكيد والتوقيع',
+              backgroundColor: AppColors.statusApproved,
               onPressed: () {
                 Navigator.of(ctx).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Meeting signed successfully!'),
+                    content: Text('تم التوقيع بنجاح!'),
                     backgroundColor: AppColors.statusApproved,
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.statusApproved,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Confirm & Sign'),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             ),
           ],
         );

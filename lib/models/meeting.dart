@@ -11,6 +11,11 @@ class Meeting {
   final List<String> attendees;
   final List<Signatory> signatories;
   final List<MeetingConnection> connections;
+  final List<int> requiredSignatures;
+  final List<String> recipients;
+  final String? sessionNumber;
+  final String? decisionNumber;
+  final String? councilType;
 
   Meeting({
     this.id,
@@ -25,6 +30,11 @@ class Meeting {
     this.attendees = const [],
     this.signatories = const [],
     this.connections = const [],
+    this.requiredSignatures = const [],
+    this.recipients = const [],
+    this.sessionNumber,
+    this.decisionNumber,
+    this.councilType,
   });
 
   factory Meeting.fromJson(Map<String, dynamic> json) {
@@ -53,6 +63,13 @@ class Meeting {
                   MeetingConnection.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      recipients: (json['recipients'] as List<dynamic>?)
+              ?.map((dynamic e) => e as String)
+              .toList() ??
+          [],
+      sessionNumber: json['sessionNumber'] as String?,
+      decisionNumber: json['decisionNumber'] as String?,
+      councilType: json['councilType'] as String?,
     );
   }
 
@@ -61,11 +78,14 @@ class Meeting {
       if (id != null) 'id': id,
       'title': title,
       'meetingDate': meetingDate.toIso8601String(),
-      if (type != null) 'type': type,
       'agenda': agenda ?? '',
       'meetingContent': meetingContent ?? '',
       'status': status,
-      if (attendees.isNotEmpty) 'attendees': attendees,
+      'requiredSignatures': requiredSignatures,
+      'recipients': recipients,
+      if (sessionNumber != null) 'sessionNumber': sessionNumber,
+      if (decisionNumber != null) 'decisionNumber': decisionNumber,
+      if (councilType != null) 'councilType': councilType,
     };
   }
 }
@@ -100,23 +120,40 @@ class Signatory {
 
 class ArchivedMeeting {
   final int id;
+  final String title;
+  final String department;
   final DateTime date;
+  final String type;
+  final int signedCount;
+  final DateTime archivedDate;
   final int signatureNeededCount;
   final int status;
   final String createdBy;
 
   ArchivedMeeting({
     required this.id,
+    this.title = '',
+    this.department = '',
     required this.date,
+    this.type = '',
+    this.signedCount = 0,
+    DateTime? archivedDate,
     required this.signatureNeededCount,
     required this.status,
     required this.createdBy,
-  });
+  }) : archivedDate = archivedDate ?? date;
 
   factory ArchivedMeeting.fromJson(Map<String, dynamic> json) {
     return ArchivedMeeting(
       id: json['id'] as int,
+      title: json['title'] as String? ?? '',
+      department: json['department'] as String? ?? '',
       date: DateTime.parse(json['date'] as String),
+      type: json['type'] as String? ?? '',
+      signedCount: json['signedCount'] as int? ?? 0,
+      archivedDate: json['archivedDate'] != null
+          ? DateTime.parse(json['archivedDate'] as String)
+          : null,
       signatureNeededCount: json['signatureNeededCount'] as int? ?? 0,
       status: json['status'] as int? ?? 0,
       createdBy: json['createdBy'] as String? ?? '',

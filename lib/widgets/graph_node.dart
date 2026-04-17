@@ -170,6 +170,20 @@ class GraphEdgePainter extends CustomPainter {
   final Offset panOffset;
   final double zoom;
 
+  static const Map<String, Color> _edgeColors = {
+    'Implements': Color(0xFF10B981),
+    'References': Color(0xFF3B82F6),
+    'Supersedes': Color(0xFFF59E0B),
+    'Supplements': Color(0xFF8B5CF6),
+    'Amends': Color(0xFFEF4444),
+  };
+
+  static const double _nodeWidth = 170;
+  static const double _nodeHalfW = _nodeWidth / 2;
+  static const double _nodeHeight = 80;
+  static const double _nodeHalfH = _nodeHeight / 2;
+  static const double _arrowSize = 10;
+
   GraphEdgePainter({
     required this.nodes,
     required this.edges,
@@ -179,57 +193,124 @@ class GraphEdgePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint linePaint = Paint()
-      ..color = const Color(0xFFCBD5E1)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
     for (final GraphEdge edge in edges) {
-      final GraphNodeData? source =
-          _findNode(edge.sourceId);
-      final GraphNodeData? target =
-          _findNode(edge.targetId);
+      final GraphNodeData? source = _findNode(edge.sourceId);
+      final GraphNodeData? target = _findNode(edge.targetId);
       if (source == null || target == null) continue;
 
-      final Offset s = (source.position + panOffset) * zoom + Offset(85, 40);
-      final Offset t = (target.position + panOffset) * zoom + Offset(85, 40);
+      final Color edgeColor = _edgeColors[edge.label] ?? const Color(0xFFCBD5E1);
 
-      // Draw curved line
-      final Path path = Path();
-      path.moveTo(s.dx, s.dy);
-      final Offset mid = Offset((s.dx + t.dx) / 2, (s.dy + t.dy) / 2 - 20);
-      path.quadraticBezierTo(mid.dx, mid.dy, t.dx, t.dy);
+      final Offset sCenter = (source.position + panOffset) * zoom +
+          const Offset(_nodeHalfW, _nodeHalfH);
+      final Offset tCenter = (target.position + panOffset) * zoom +
+          const Offset(_nodeHalfW, _nodeHalfH);
+
+      final Offset sEdge = _nodeEdgePoint(sCenter, tCenter);
+      final Offset tEdge = _nodeEdgePoint(tCenter, sCenter);
+
+      final Offset rawMid = (sEdge + tEdge) / 2;
+      final Offset perpDir = Offset(-(tEdge.dy - sEdge.dy), tEdge.dx - sEdge.dx);
+      final double perpLen = perpDir.distance;
+      final Offset curveOffset = perpLen > 0
+          ? perpDir / perpLen * 25 * zoom
+          : Offset.zero;
+      final Offset controlPt = rawMid + curveOffset;
+
+      final Paint linePaint = Paint()
+        ..color = edgeColor.withValues(alpha: 0.7)
+        ..strokeWidth = 2.0
+        ..style = PaintingStyle.stroke;
+
+      final Path path = Path()
+        ..moveTo(sEdge.dx, sEdge.dy)
+        ..quadraticBezierTo(controlPt.dx, controlPt.dy, tEdge.dx, tEdge.dy);
       canvas.drawPath(path, linePaint);
 
-      // Draw arrow
-      final Offset dir = (t - s);
-      final double len = dir.distance;
-      if (len > 0) {
-        final Offset unitDir = dir / len;
-        final Offset arrowTip = t - unitDir * 10;
-        final Offset perp = Offset(-unitDir.dy, unitDir.dx);
+      // Arrowhead aligned to curve tangent at endpoint
+      final Offset tangent = tEdge - controlPt;
+      final double tangentLen = tangent.distance;
+      if (tangentLen > 0) {
+        final Offset unitTangent = tangent / tangentLen;
+        final Offset perp = Offset(-unitTangent.dy, unitTangent.dx);
+        final double arrowLen = _arrowSize * zoom.clamp(0.6, 1.4);
+        final double arrowHalfW = arrowLen * 0.45;
+        final Offset arrowBase = tEdge - unitTangent * arrowLen;
+
         final Path arrow = Path()
-          ..moveTo(t.dx, t.dy)
-          ..lineTo(arrowTip.dx + perp.dx * 5, arrowTip.dy + perp.dy * 5)
-          ..lineTo(arrowTip.dx - perp.dx * 5, arrowTip.dy - perp.dy * 5)
+          ..moveTo(tEdge.dx, tEdge.dy)
+          ..lineTo(arrowBase.dx + perp.dx * arrowHalfW,
+              arrowBase.dy + perp.dy * arrowHalfW)
+          ..lineTo(arrowBase.dx - perp.dx * arrowHalfW,
+              arrowBase.dy - perp.dy * arrowHalfW)
           ..close();
         canvas.drawPath(
-            arrow,
-            Paint()
-              ..color = const Color(0xFFCBD5E1)
-              ..style = PaintingStyle.fill);
+          arrow,
+          Paint()
+            ..color = edgeColor
+            ..style = PaintingStyle.fill,
+        );
       }
 
-      // Draw label
+      // Edge label with background pill
       final TextPainter tp = TextPainter(
         text: TextSpan(
           text: edge.label,
-          style: const TextStyle(fontSize: 9, color: AppColors.textMuted),
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            color: edgeColor,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(mid.dx - tp.width / 2, mid.dy - tp.height - 4));
+
+      final Offset labelPos = _quadraticBezierPoint(sEdge, controlPt, tEdge, 0.5);
+      final Offset labelOffset = Offset(
+        labelPos.dx - tp.width / 2,
+        labelPos.dy - tp.height / 2,
+      );
+
+      final RRect pillRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          labelOffset.dx - 5,
+          labelOffset.dy - 2,
+          tp.width + 10,
+          tp.height + 4,
+        ),
+        const Radius.circular(6),
+      );
+      canvas.drawRRect(
+        pillRect,
+        Paint()..color = Colors.white.withValues(alpha: 0.92),
+      );
+      canvas.drawRRect(
+        pillRect,
+        Paint()
+          ..color = edgeColor.withValues(alpha: 0.25)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+      tp.paint(canvas, labelOffset);
     }
+  }
+
+  Offset _nodeEdgePoint(Offset nodeCenter, Offset other) {
+    final Offset dir = other - nodeCenter;
+    if (dir.distance == 0) return nodeCenter;
+
+    final double hw = _nodeHalfW * zoom;
+    final double hh = _nodeHalfH * zoom;
+
+    final double scaleX = dir.dx != 0 ? (hw / dir.dx.abs()) : double.infinity;
+    final double scaleY = dir.dy != 0 ? (hh / dir.dy.abs()) : double.infinity;
+    final double scale = scaleX < scaleY ? scaleX : scaleY;
+
+    return nodeCenter + dir * scale;
+  }
+
+  Offset _quadraticBezierPoint(Offset p0, Offset p1, Offset p2, double t) {
+    final double mt = 1 - t;
+    return p0 * (mt * mt) + p1 * (2 * mt * t) + p2 * (t * t);
   }
 
   GraphNodeData? _findNode(String id) {

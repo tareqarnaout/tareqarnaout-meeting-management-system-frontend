@@ -5,18 +5,18 @@ class AppColors {
   static const Color sidebarBg = Color(0xFFFFFFFF);
   static const Color sidebarActiveItem = Color(0xFFE0F7FA); // light cyan/teal bg
   static const Color sidebarText = Color(0xFF4B5563); // dark gray
-  static const Color sidebarActiveText = Color(0xFF2C7A7B); // teal accent
-  static const Color sidebarAccent = Color(0xFF2C7A7B);
+  static const Color sidebarActiveText = Color(0xFF2E7D9E); // teal accent
+  static const Color sidebarAccent = Color(0xFF2E7D9E);
 
   // Primary actions — unified teal palette
-  static const Color primaryTeal = Color(0xFF2C7A7B);
-  static const Color primaryBlue = Color(0xFF2C7A7B); // teal (replacing old blue)
+  static const Color primaryTeal = Color(0xFF2E7D9E);
+  static const Color primaryBlue = Color(0xFF2E7D9E); // teal (replacing old blue)
 
   // Status colors
   static const Color statusDraft = Color(0xFFEF4444);
   static const Color statusPending = Color(0xFFF59E0B);
   static const Color statusApproved = Color(0xFF10B981);
-  static const Color statusFinalized = Color(0xFF2C7A7B); // teal (replacing indigo)
+  static const Color statusFinalized = Color(0xFF2E7D9E); // teal (replacing indigo)
 
   // Backgrounds
   static const Color pageBg = Color(0xFFF8F9FA);

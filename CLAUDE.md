@@ -169,15 +169,7 @@ Store the `roleId` alongside the token and use it to show or hide UI elements pe
 | POST | `/api/meetings/` | ✅ | Create a new meeting |
 | POST | `/api/meetings/signature/verify` | ✅ | Submit a digital signature for a meeting |
 
-**Create meeting request body:**
-```json
-{
-  "meetingDate": "2026-04-01T10:00:00",
-  "agenda": "Discuss Q2 plans",
-  "meetingContent": "Full meeting notes here...",
-  "status": 0
-}
-```
+
 
 **Signature verify — no request body needed.** The endpoint reads `UserId` and `MeetingId` from the JWT claims directly.
 

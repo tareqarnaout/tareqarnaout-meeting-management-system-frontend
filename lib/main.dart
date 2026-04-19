@@ -6,6 +6,7 @@ import 'screens/shell_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/create_meeting_screen.dart';
 import 'screens/review_sign_screen.dart';
+import 'screens/meeting_sign_detail_screen.dart';
 import 'screens/decision_graph_screen.dart';
 import 'screens/archive_screen.dart';
 import 'screens/user_management_screen.dart';
@@ -14,13 +15,62 @@ void main() {
   runApp(const MyApp());
 }
 
+/// Returns a [CustomTransitionPage] that fades in from 8px below on enter
+/// and fades out to 8px above on exit — matching Framer Motion's
+/// `initial={{ opacity: 0, y: 8 }}` / `exit={{ opacity: 0, y: -8 }}`.
+CustomTransitionPage<void> _fadeSlide({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 250),
+    reverseTransitionDuration: const Duration(milliseconds: 250),
+    transitionsBuilder: (
+      BuildContext context,
+      Animation<double> animation,
+      Animation<double> secondaryAnimation,
+      Widget child,
+    ) {
+      final Animation<double> curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeInOut,
+        reverseCurve: Curves.easeInOut,
+      );
+
+      return FadeTransition(
+        opacity: curved,
+        child: AnimatedBuilder(
+          animation: curved,
+          child: child,
+          builder: (BuildContext ctx, Widget? child) {
+            // Enter: +8px → 0  (slides upward into view)
+            // Exit:   0 → -8px (continues upward out of view)
+            final bool exiting =
+                animation.status == AnimationStatus.reverse ||
+                animation.status == AnimationStatus.dismissed;
+            final double dy = exiting
+                ? -(1.0 - curved.value) * 8.0
+                : (1.0 - curved.value) * 8.0;
+            return Transform.translate(
+              offset: Offset(0, dy),
+              child: child,
+            );
+          },
+        ),
+      );
+    },
+  );
+}
+
 final GoRouter _router = GoRouter(
   initialLocation: '/login',
   routes: [
     GoRoute(
       path: '/login',
-      builder: (BuildContext context, GoRouterState state) =>
-          const LoginScreen(),
+      pageBuilder: (BuildContext context, GoRouterState state) =>
+          _fadeSlide(state: state, child: const LoginScreen()),
     ),
     ShellRoute(
       builder: (BuildContext context, GoRouterState state, Widget child) {
@@ -32,37 +82,52 @@ final GoRouter _router = GoRouter(
       routes: [
         GoRoute(
           path: '/',
-          builder: (BuildContext context, GoRouterState state) =>
-              const DashboardScreen(),
+          pageBuilder: (BuildContext context, GoRouterState state) =>
+              _fadeSlide(state: state, child: const DashboardScreen()),
         ),
         GoRoute(
           path: '/create',
-          builder: (BuildContext context, GoRouterState state) =>
-              const CreateMeetingScreen(),
+          pageBuilder: (BuildContext context, GoRouterState state) =>
+              _fadeSlide(state: state, child: const CreateMeetingScreen()),
         ),
         GoRoute(
           path: '/review',
-          builder: (BuildContext context, GoRouterState state) =>
-              const ReviewSignScreen(),
+          pageBuilder: (BuildContext context, GoRouterState state) =>
+              _fadeSlide(state: state, child: const ReviewSignScreen()),
+        ),
+        GoRoute(
+          path: '/review/:id',
+          pageBuilder: (BuildContext context, GoRouterState state) {
+            final int meetingId =
+                int.parse(state.pathParameters['id']!);
+            return _fadeSlide(
+              state: state,
+              child: MeetingSignDetailScreen(meetingId: meetingId),
+            );
+          },
         ),
         GoRoute(
           path: '/graph',
-          builder: (BuildContext context, GoRouterState state) {
-            final String? meetingParam = state.uri.queryParameters['meeting'];
+          pageBuilder: (BuildContext context, GoRouterState state) {
+            final String? meetingParam =
+                state.uri.queryParameters['meeting'];
             final int? meetingId =
                 meetingParam != null ? int.tryParse(meetingParam) : null;
-            return DecisionGraphScreen(meetingId: meetingId);
+            return _fadeSlide(
+              state: state,
+              child: DecisionGraphScreen(meetingId: meetingId),
+            );
           },
         ),
         GoRoute(
           path: '/archive',
-          builder: (BuildContext context, GoRouterState state) =>
-              const ArchiveScreen(),
+          pageBuilder: (BuildContext context, GoRouterState state) =>
+              _fadeSlide(state: state, child: const ArchiveScreen()),
         ),
         GoRoute(
           path: '/users',
-          builder: (BuildContext context, GoRouterState state) =>
-              const UserManagementScreen(),
+          pageBuilder: (BuildContext context, GoRouterState state) =>
+              _fadeSlide(state: state, child: const UserManagementScreen()),
         ),
       ],
     ),

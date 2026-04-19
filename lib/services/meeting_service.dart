@@ -36,6 +36,21 @@ class MeetingService {
     }
   }
 
+  Future<List<Meeting>> getPendingSignMeetings() async {
+    try {
+      final response = await _api.get('/meetings/GetPendingSignMeetings');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+        return data
+            .map((dynamic e) => Meeting.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<Meeting?> getMeeting(int id) async {
     try {
       final response = await _api.get('/meetings/$id');

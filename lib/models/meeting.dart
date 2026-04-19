@@ -125,42 +125,28 @@ class Signatory {
 class ArchivedMeeting {
   final int id;
   final String title;
-  final String department;
   final DateTime date;
   final String type;
-  final int signedCount;
-  final DateTime archivedDate;
   final int signatureNeededCount;
   final int status;
-  final String createdBy;
 
   ArchivedMeeting({
     required this.id,
     this.title = '',
-    this.department = '',
     required this.date,
     this.type = '',
-    this.signedCount = 0,
-    DateTime? archivedDate,
     required this.signatureNeededCount,
     required this.status,
-    required this.createdBy,
-  }) : archivedDate = archivedDate ?? date;
+  });
 
   factory ArchivedMeeting.fromJson(Map<String, dynamic> json) {
     return ArchivedMeeting(
       id: json['id'] as int,
       title: json['title'] as String? ?? '',
-      department: json['department'] as String? ?? '',
-      date: DateTime.parse(json['date'] as String),
-      type: json['type'] as String? ?? '',
-      signedCount: json['signedCount'] as int? ?? 0,
-      archivedDate: json['archivedDate'] != null
-          ? DateTime.parse(json['archivedDate'] as String)
-          : null,
+      date: DateTime.parse(json['meetingDate'] as String),
+      type: json['councilType'] as String? ?? '',
       signatureNeededCount: json['signatureNeededCount'] as int? ?? 0,
       status: json['status'] as int? ?? 0,
-      createdBy: json['createdBy'] as String? ?? '',
     );
   }
 }

@@ -24,19 +24,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
   Timer? _debounce;
 
   String _typeFilter = 'All Types';
-  String _departmentFilter = 'All Departments';
 
-  // Fallback sample data when backend is unavailable
-  static final List<ArchivedMeeting> _sampleMeetings = [
-    ArchivedMeeting(id: 1, title: 'Q3 Department Review', department: 'Computer Science', date: DateTime(2025, 10, 10), type: 'Departmental', signedCount: 8, archivedDate: DateTime(2025, 10, 12), signatureNeededCount: 8, status: 2, createdBy: 'Dr. Abdulla Qusef'),
-    ArchivedMeeting(id: 2, title: 'Lab Equipment Procurement', department: 'Computer Science', date: DateTime(2025, 10, 5), type: 'Committee', signedCount: 5, archivedDate: DateTime(2025, 10, 7), signatureNeededCount: 5, status: 2, createdBy: 'Dr. Ahmad Al-Ali'),
-    ArchivedMeeting(id: 3, title: 'Curriculum Committee Meeting', department: 'Computer Science', date: DateTime(2025, 9, 28), type: 'Committee', signedCount: 4, archivedDate: DateTime(2025, 9, 30), signatureNeededCount: 4, status: 2, createdBy: 'Dr. Mohammad Al-Hassan'),
-    ArchivedMeeting(id: 4, title: 'Faculty Hiring Committee', department: 'Computer Science', date: DateTime(2025, 9, 20), type: 'Hiring', signedCount: 6, archivedDate: DateTime(2025, 9, 22), signatureNeededCount: 6, status: 2, createdBy: 'Dr. Abdulla Qusef'),
-    ArchivedMeeting(id: 5, title: 'Budget Planning Session', department: 'Computer Science', date: DateTime(2025, 9, 15), type: 'Budget', signedCount: 4, archivedDate: DateTime(2025, 9, 17), signatureNeededCount: 4, status: 2, createdBy: 'Dr. Fatima Al-Khaldi'),
-    ArchivedMeeting(id: 6, title: 'Graduate Program Review', department: 'Computer Science', date: DateTime(2025, 9, 8), type: 'Departmental', signedCount: 4, archivedDate: DateTime(2025, 9, 10), signatureNeededCount: 4, status: 2, createdBy: 'Dr. Khalid Al-Salem'),
-    ArchivedMeeting(id: 7, title: 'Research Collaboration Planning', department: 'Computer Science', date: DateTime(2025, 8, 30), type: 'Faculty', signedCount: 3, archivedDate: DateTime(2025, 9, 1), signatureNeededCount: 3, status: 2, createdBy: 'Dr. Nora Al-Marri'),
-    ArchivedMeeting(id: 8, title: 'Safety Committee Annual Review', department: 'Computer Science', date: DateTime(2025, 8, 25), type: 'Committee', signedCount: 5, archivedDate: DateTime(2025, 8, 27), signatureNeededCount: 5, status: 2, createdBy: 'Dr. Youssef Al-Nasser'),
-  ];
 
   @override
   void initState() {
@@ -55,7 +43,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
     if (!mounted) return;
 
     setState(() {
-      _meetings = meetings.isNotEmpty ? meetings : _sampleMeetings;
+      _meetings = meetings;
       _isLoading = false;
     });
   }
@@ -105,7 +93,6 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
       result = _meetings.where((ArchivedMeeting m) {
         if (query.isNotEmpty &&
             !m.title.toLowerCase().contains(query) &&
-            !m.department.toLowerCase().contains(query) &&
             !m.type.toLowerCase().contains(query)) {
           return false;
         }
@@ -118,11 +105,6 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
           .where((ArchivedMeeting m) => m.type == _typeFilter)
           .toList();
     }
-    if (_departmentFilter != 'All Departments') {
-      result = result
-          .where((ArchivedMeeting m) => m.department == _departmentFilter)
-          .toList();
-    }
 
     return result;
   }
@@ -133,11 +115,6 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
     return ['All Types', ...types];
   }
 
-  List<String> get _availableDepartments {
-    final Set<String> depts =
-        _meetings.map((ArchivedMeeting m) => m.department).where((String d) => d.isNotEmpty).toSet();
-    return ['All Departments', ...depts];
-  }
 
   @override
   void dispose() {
@@ -219,15 +196,6 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                               items: _availableTypes,
                               onChanged: (String? v) => setState(
                                   () => _typeFilter = v ?? 'All Types'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _buildDropdown(
-                              value: _departmentFilter,
-                              items: _availableDepartments,
-                              onChanged: (String? v) => setState(() =>
-                                  _departmentFilter = v ?? 'All Departments'),
                             ),
                           ),
                         ],
@@ -324,24 +292,13 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      m.title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    if (m.department.isNotEmpty)
-                      Text(
-                        m.department,
-                        style: const TextStyle(
-                            fontSize: 11, color: AppColors.primaryTeal),
-                      ),
-                  ],
+                child: Text(
+                  m.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -356,10 +313,11 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
               const SizedBox(width: 4),
               Text(dateFmt.format(m.date), style: AppTextStyles.bodySmall),
               const SizedBox(width: 14),
-              Icon(Icons.check_circle_outline,
-                  size: 13, color: AppColors.statusApproved),
+              const Icon(Icons.people_outline,
+                  size: 13, color: AppColors.textMuted),
               const SizedBox(width: 4),
-              Text('${m.signedCount} signed', style: AppTextStyles.bodySmall),
+              Text('${m.signatureNeededCount} signatories',
+                  style: AppTextStyles.bodySmall),
             ],
           ),
           const SizedBox(height: 10),
@@ -369,8 +327,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color:
-                      AppColors.statusApproved.withValues(alpha: 0.08),
+                  color: AppColors.statusApproved.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
@@ -384,12 +341,10 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
               ),
               const Spacer(),
               InkWell(
-                onTap: () =>
-                    context.go('/graph?meeting=${m.id}'),
+                onTap: () => context.go('/graph?meeting=${m.id}'),
                 borderRadius: BorderRadius.circular(4),
                 child: const Padding(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -398,8 +353,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                       SizedBox(width: 4),
                       Text('View',
                           style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary)),
+                              fontSize: 12, color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
@@ -408,8 +362,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                 onTap: () {},
                 borderRadius: BorderRadius.circular(4),
                 child: const Padding(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Icon(Icons.download_outlined,
                       size: 16, color: AppColors.textSecondary),
                 ),
@@ -441,7 +394,6 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
               Expanded(flex: 3, child: _HeaderCell('Date')),
               Expanded(flex: 3, child: _HeaderCell('Type')),
               Expanded(flex: 3, child: _HeaderCell('Signatories')),
-              Expanded(flex: 3, child: _HeaderCell('Archived')),
               Expanded(flex: 2, child: _HeaderCell('Status')),
               Expanded(flex: 2, child: _HeaderCell('Actions')),
             ],
@@ -475,11 +427,6 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          if (m.department.isNotEmpty)
-                            Text(m.department,
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.primaryTeal)),
                         ],
                       ),
                     ),
@@ -505,19 +452,13 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                       flex: 3,
                       child: Row(
                         children: [
-                          Icon(Icons.check_circle_outline,
-                              size: 14,
-                              color: AppColors.statusApproved),
+                          const Icon(Icons.people_outline,
+                              size: 14, color: AppColors.textMuted),
                           const SizedBox(width: 5),
-                          Text('${m.signedCount} signed',
+                          Text('${m.signatureNeededCount}',
                               style: AppTextStyles.bodySmall),
                         ],
                       ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(dateFmt.format(m.archivedDate),
-                          style: AppTextStyles.bodySmall),
                     ),
                     Expanded(
                       flex: 2,

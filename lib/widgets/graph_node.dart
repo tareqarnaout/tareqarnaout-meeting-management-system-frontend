@@ -171,11 +171,9 @@ class GraphEdgePainter extends CustomPainter {
   final double zoom;
 
   static const Map<String, Color> _edgeColors = {
-    'Implements': Color(0xFF10B981),
-    'References': Color(0xFF3B82F6),
-    'Supersedes': Color(0xFFF59E0B),
-    'Supplements': Color(0xFF8B5CF6),
-    'Amends': Color(0xFFEF4444),
+    'Applies': Color(0xFF10B981),
+    'Change': Color(0xFFF59E0B),
+    'Continue': Color(0xFF3B82F6),
   };
 
   static const double _nodeWidth = 170;

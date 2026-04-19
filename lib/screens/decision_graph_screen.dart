@@ -1,13 +1,16 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../constants/app_theme.dart';
+import '../models/meeting.dart';
+import '../services/meeting_service.dart';
 import '../widgets/graph_node.dart';
 
 class DecisionGraphScreen extends StatefulWidget {
-  final String? focusMeeting;
+  final int? meetingId;
 
-  const DecisionGraphScreen({super.key, this.focusMeeting});
+  const DecisionGraphScreen({super.key, this.meetingId});
 
   @override
   State<DecisionGraphScreen> createState() => _DecisionGraphScreenState();
@@ -16,60 +19,101 @@ class DecisionGraphScreen extends StatefulWidget {
 class _DecisionGraphScreenState extends State<DecisionGraphScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  final MeetingService _meetingService = MeetingService();
   late AnimationController _animController;
 
-  final Set<String> _activeFilters = {'Implements', 'References', 'Supersedes', 'Supplements', 'Amends'};
+  final Set<String> _activeFilters = {'Applies', 'Change', 'Continue'};
 
-  // Graph data
-  late List<GraphNodeData> _nodes;
-  late List<GraphEdge> _edges;
+  List<GraphNodeData> _nodes = [];
+  List<GraphEdge> _edges = [];
+
+  bool _isLoading = true;
+  Meeting? _focusedMeeting;
 
   Offset _panOffset = Offset.zero;
   double _zoom = 1.0;
   String? _draggingNodeId;
   Offset _lastFocalPoint = Offset.zero;
 
-  // Force simulation
-  bool _isSimulating = true;
+  bool _isSimulating = false;
 
   @override
   void initState() {
     super.initState();
-    _initGraphData();
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
     )..addListener(_simulateForces);
-    _animController.repeat();
 
-    // Auto-focus on the meeting passed via parameter
-    if (widget.focusMeeting != null && widget.focusMeeting!.isNotEmpty) {
-      _searchController.text = widget.focusMeeting!;
-      _onSearch(widget.focusMeeting!);
-    }
+    _loadGraphData();
   }
 
-  void _initGraphData() {
+  Future<void> _loadGraphData() async {
+    if (widget.meetingId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    final results = await Future.wait([
+      _meetingService.getMeeting(widget.meetingId!),
+      _meetingService.getMeetingRelationships(widget.meetingId!),
+    ]);
+
+    if (!mounted) return;
+
+    final Meeting? focused = results[0] as Meeting?;
+    final List<MeetingRelationship> relationships =
+        results[1] as List<MeetingRelationship>;
+
+    _buildGraph(focused, relationships);
+
+    setState(() {
+      _focusedMeeting = focused;
+      _isLoading = false;
+      _isSimulating = true;
+    });
+    _animController.repeat();
+  }
+
+  void _buildGraph(Meeting? focused, List<MeetingRelationship> relationships) {
     final Random rng = Random(42);
+    final String centerId = 'center';
+
+    final String centerTitle = focused?.title ?? 'Selected Meeting';
+    final String centerDate = focused != null
+        ? DateFormat('MMM d, yyyy').format(focused.meetingDate)
+        : '';
+
     _nodes = [
-      GraphNodeData(id: 'n1', title: 'Department Safety Review', date: 'Oct 15, 2025', type: 'Department', status: 0, position: Offset(100 + rng.nextDouble() * 200, 80 + rng.nextDouble() * 100)),
-      GraphNodeData(id: 'n2', title: 'Curriculum Review Committee', date: 'Oct 20, 2025', type: 'Committee', status: 1, position: Offset(400 + rng.nextDouble() * 100, 60 + rng.nextDouble() * 100)),
-      GraphNodeData(id: 'n3', title: 'Budget Planning Session', date: 'Nov 8, 2025', type: 'Administrative', status: 2, position: Offset(250 + rng.nextDouble() * 100, 250 + rng.nextDouble() * 80)),
-      GraphNodeData(id: 'n4', title: 'Faculty Hiring Committee', date: 'Sep 28, 2025', type: 'Committee', status: 1, position: Offset(500 + rng.nextDouble() * 150, 220 + rng.nextDouble() * 80)),
-      GraphNodeData(id: 'n5', title: 'Research Collaboration Proposal', date: 'Nov 3, 2025', type: 'Faculty', status: 0, position: Offset(100 + rng.nextDouble() * 100, 350 + rng.nextDouble() * 60)),
-      GraphNodeData(id: 'n6', title: 'Student Affairs Meeting', date: 'Sep 10, 2025', type: 'Department', status: 2, position: Offset(380 + rng.nextDouble() * 100, 380 + rng.nextDouble() * 60)),
-      GraphNodeData(id: 'n7', title: 'Lab Equipment Procurement', date: 'Aug 22, 2025', type: 'Administrative', status: 2, position: Offset(600 + rng.nextDouble() * 100, 100 + rng.nextDouble() * 80)),
+      GraphNodeData(
+        id: centerId,
+        title: centerTitle,
+        date: centerDate,
+        status: focused?.status ?? 0,
+        position: const Offset(300, 220),
+        isHighlighted: true,
+      ),
+      ...relationships.map((MeetingRelationship r) {
+        return GraphNodeData(
+          id: 'r_${r.meetingId}',
+          title: r.title,
+          date: DateFormat('MMM d, yyyy').format(r.meetingDate),
+          status: 2, // relationships are from finalized meetings
+          position: Offset(
+            100 + rng.nextDouble() * 500,
+            60 + rng.nextDouble() * 350,
+          ),
+        );
+      }),
     ];
 
-    _edges = const [
-      GraphEdge(sourceId: 'n1', targetId: 'n2', label: 'References'),
-      GraphEdge(sourceId: 'n2', targetId: 'n3', label: 'Implements'),
-      GraphEdge(sourceId: 'n3', targetId: 'n4', label: 'Supplements'),
-      GraphEdge(sourceId: 'n1', targetId: 'n5', label: 'Amends'),
-      GraphEdge(sourceId: 'n5', targetId: 'n6', label: 'References'),
-      GraphEdge(sourceId: 'n4', targetId: 'n7', label: 'Supersedes'),
-      GraphEdge(sourceId: 'n6', targetId: 'n3', label: 'Implements'),
-    ];
+    _edges = relationships
+        .map((MeetingRelationship r) => GraphEdge(
+              sourceId: centerId,
+              targetId: 'r_${r.meetingId}',
+              label: r.type,
+            ))
+        .toList();
   }
 
   void _simulateForces() {
@@ -82,7 +126,6 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
     const double damping = 0.85;
     const double minDelta = 0.1;
 
-    // Repulsive forces between all node pairs
     for (int i = 0; i < _nodes.length; i++) {
       if (_nodes[i].isDragging) continue;
       Offset force = Offset.zero;
@@ -94,7 +137,6 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
         force += diff / dist * (repulsion / (dist * dist));
       }
 
-      // Spring forces for connected edges
       for (final GraphEdge edge in _edges) {
         GraphNodeData? other;
         if (edge.sourceId == _nodes[i].id) {
@@ -112,7 +154,6 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
         }
       }
 
-      // Center gravity
       const Offset center = Offset(400, 250);
       final Offset toCenter = center - _nodes[i].position;
       force += toCenter * 0.001;
@@ -142,8 +183,9 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
   void _onSearch(String query) {
     setState(() {
       for (final GraphNodeData node in _nodes) {
-        node.isHighlighted = query.isNotEmpty &&
-            node.title.toLowerCase().contains(query.toLowerCase());
+        node.isHighlighted = node.id == 'center' ||
+            (query.isNotEmpty &&
+                node.title.toLowerCase().contains(query.toLowerCase()));
       }
     });
   }
@@ -157,295 +199,354 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.pageBg,
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title row
-            Row(
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool isMobile = constraints.maxWidth < 600;
+
+        return Container(
+          color: AppColors.pageBg,
+          child: Padding(
+            padding: EdgeInsets.all(isMobile ? 16 : 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          InkWell(
-                            onTap: () => context.go('/archive'),
-                            borderRadius: BorderRadius.circular(6),
-                            child: const Padding(
-                              padding: EdgeInsets.all(4),
-                              child: Icon(Icons.arrow_back_ios,
-                                  size: 16, color: AppColors.textSecondary),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text('Decision Graph', style: AppTextStyles.heading1),
-                        ],
+                // Header
+                Row(
+                  children: [
+                    InkWell(
+                      onTap: () => context.go('/archive'),
+                      borderRadius: BorderRadius.circular(6),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.arrow_back_ios,
+                            size: 16, color: AppColors.textSecondary),
                       ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Explore how meeting decisions, rules, and items connect across documents.',
-                        style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text('Decision Graph',
+                          style: AppTextStyles.heading1),
+                    ),
+                    if (!isMobile)
+                      OutlinedButton.icon(
+                        onPressed: () => context.go('/archive'),
+                        icon: const Icon(Icons.arrow_back, size: 16),
+                        label: const Text('Back to Archive'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textSecondary,
+                          side: const BorderSide(color: AppColors.border),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _focusedMeeting != null
+                      ? 'Relationships for: ${_focusedMeeting!.title}'
+                      : 'Explore how meeting decisions connect across documents.',
+                  style: const TextStyle(
+                      fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+
+                // Search
+                TextField(
+                  controller: _searchController,
+                  onChanged: _onSearch,
+                  decoration: AppDecorations.inputDecoration(
+                    '',
+                    hint: 'Search for meetings, decisions...',
+                    suffixIcon: const Icon(Icons.search,
+                        size: 18, color: AppColors.textMuted),
+                  ).copyWith(labelText: null),
+                ),
+                const SizedBox(height: 12),
+
+                // Filter chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      const Text('Relationship Type:',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary)),
+                      const SizedBox(width: 10),
+                      ..._buildFilterChips(),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Pro tip
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F9FF),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFBAE6FD)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lightbulb_outline,
+                          size: 16, color: Color(0xFF0284C7)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: RichText(
+                          text: TextSpan(
+                            style: const TextStyle(
+                                fontSize: 12, color: Color(0xFF0369A1)),
+                            children: [
+                              const TextSpan(
+                                  text: 'Pro tip: ',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600)),
+                              TextSpan(
+                                  text: isMobile
+                                      ? 'Drag nodes to rearrange, pinch to zoom.'
+                                      : 'The highlighted center node is the selected meeting. '
+                                          'Drag nodes to rearrange, scroll to zoom, and use filters to focus on specific relationship types.'),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
-                OutlinedButton.icon(
-                  onPressed: () => context.go('/archive'),
-                  icon: const Icon(Icons.arrow_back, size: 16),
-                  label: const Text('Back to Archive'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    side: const BorderSide(color: AppColors.border),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
+                const SizedBox(height: 12),
 
-            // Search bar
-            Row(
-              children: [
+                // Stats strip (mobile) or side panel (desktop)
+                if (isMobile) _buildMobileStatsStrip(),
+                if (isMobile) const SizedBox(height: 12),
+
+                // Graph canvas (always expanded)
                 Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: _onSearch,
-                    decoration: AppDecorations.inputDecoration(
-                      '',
-                      hint: 'Search for meetings, decisions, rules, and action items...',
-                      suffixIcon: const Icon(Icons.search,
-                          size: 18, color: AppColors.textMuted),
-                    ).copyWith(labelText: null),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.white,
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: 'All Meeting Types',
-                      style: const TextStyle(
-                          fontSize: 12, color: AppColors.textSecondary),
-                      icon: const Icon(Icons.keyboard_arrow_down,
-                          size: 16, color: AppColors.textMuted),
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'All Meeting Types',
-                            child: Text('All Meeting Types')),
-                      ],
-                      onChanged: (_) {},
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Relationship type filter chips
-            Row(
-              children: [
-                const Text('Relationship Type:',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondary)),
-                const SizedBox(width: 10),
-                ..._buildFilterChips(),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // AI tip
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0F9FF),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFBAE6FD)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.lightbulb_outline,
-                      size: 16, color: Color(0xFF0284C7)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: RichText(
-                      text: const TextSpan(
-                        style: TextStyle(fontSize: 12, color: Color(0xFF0369A1)),
-                        children: [
-                          TextSpan(
-                              text: 'Pro tip: ',
-                              style: TextStyle(fontWeight: FontWeight.w600)),
-                          TextSpan(
-                              text:
-                                  'Enter a meeting name to see linked sub-sections. When looking at a meeting, you can find it\'s previous decisions or track that sub-sections/decisions that flow. Try '),
-                          TextSpan(
-                              text: '"Department Budget"',
-                              style: TextStyle(fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Graph area
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Statistics panel
-                  Container(
-                    width: 180,
-                    padding: const EdgeInsets.all(16),
-                    decoration: AppDecorations.cardWithBorder,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Graph Statistics',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary)),
-                        const SizedBox(height: 16),
-                        _statRow('Total Meetings', '${_nodes.length}',
-                            AppColors.primaryBlue),
-                        const SizedBox(height: 12),
-                        _statRow('Total Connections', '${_edges.length}',
-                            AppColors.statusApproved),
-                        const SizedBox(height: 12),
-                        _statRow(
-                            'Pending',
-                            '${_nodes.where((GraphNodeData n) => n.status == 1).length}',
-                            AppColors.statusPending),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-
-                  // Graph canvas
-                  Expanded(
-                    child: Container(
-                      decoration: AppDecorations.cardWithBorder,
-                      clipBehavior: Clip.hardEdge,
-                      child: GestureDetector(
-                        onScaleStart: (ScaleStartDetails details) {
-                          _lastFocalPoint = details.focalPoint;
-                        },
-                        onScaleUpdate: (ScaleUpdateDetails details) {
-                          if (_draggingNodeId == null) {
-                            setState(() {
-                              _panOffset += (details.focalPoint - _lastFocalPoint) / _zoom;
-                              _lastFocalPoint = details.focalPoint;
-                              if (details.scale != 1.0) {
-                                _zoom = (_zoom * details.scale).clamp(0.4, 2.0);
-                              }
-                            });
-                          }
-                        },
-                        child: Stack(
+                  child: isMobile
+                      ? _buildGraphCanvas()
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Edge painter
-                            Positioned.fill(
-                              child: CustomPaint(
-                                painter: GraphEdgePainter(
-                                  nodes: _nodes,
-                                  edges: _filteredEdges,
-                                  panOffset: _panOffset,
-                                  zoom: _zoom,
-                                ),
-                              ),
-                            ),
-                            // Nodes
-                            ..._nodes.map((GraphNodeData node) {
-                              final Offset pos =
-                                  (node.position + _panOffset) * _zoom;
-                              return Positioned(
-                                left: pos.dx,
-                                top: pos.dy,
-                                child: GestureDetector(
-                                  onPanStart: (_) {
-                                    setState(() {
-                                      _draggingNodeId = node.id;
-                                      node.isDragging = true;
-                                      _isSimulating = false;
-                                    });
-                                  },
-                                  onPanUpdate: (DragUpdateDetails details) {
-                                    setState(() {
-                                      node.position +=
-                                          details.delta / _zoom;
-                                    });
-                                  },
-                                  onPanEnd: (_) {
-                                    setState(() {
-                                      _draggingNodeId = null;
-                                      node.isDragging = false;
-                                      node.velocity = Offset.zero;
-                                      _isSimulating = true;
-                                      _animController.repeat();
-                                    });
-                                  },
-                                  child: MouseRegion(
-                                    cursor: SystemMouseCursors.grab,
-                                    child: GraphNodeWidget(node: node),
-                                  ),
-                                ),
-                              );
-                            }),
-                            // Zoom controls
-                            Positioned(
-                              bottom: 12,
-                              right: 12,
+                            Container(
+                              width: 180,
+                              padding: const EdgeInsets.all(16),
+                              decoration: AppDecorations.cardWithBorder,
                               child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  _zoomButton(Icons.add, () {
-                                    setState(
-                                        () => _zoom = (_zoom + 0.1).clamp(0.4, 2.0));
-                                  }),
-                                  const SizedBox(height: 4),
-                                  _zoomButton(Icons.remove, () {
-                                    setState(
-                                        () => _zoom = (_zoom - 0.1).clamp(0.4, 2.0));
-                                  }),
-                                  const SizedBox(height: 4),
-                                  _zoomButton(Icons.center_focus_strong, () {
-                                    setState(() {
-                                      _panOffset = Offset.zero;
-                                      _zoom = 1.0;
-                                    });
-                                  }),
+                                  const Text('Graph Statistics',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary)),
+                                  const SizedBox(height: 16),
+                                  _statRow(
+                                      'Related Meetings',
+                                      '${max(0, _nodes.length - 1)}',
+                                      AppColors.primaryBlue),
+                                  const SizedBox(height: 12),
+                                  _statRow(
+                                      'Total Connections',
+                                      '${_edges.length}',
+                                      AppColors.statusApproved),
+                                  const SizedBox(height: 12),
+                                  _statRow(
+                                      'Applies',
+                                      '${_edges.where((GraphEdge e) => e.label == 'Applies').length}',
+                                      const Color(0xFF10B981)),
+                                  const SizedBox(height: 12),
+                                  _statRow(
+                                      'Change',
+                                      '${_edges.where((GraphEdge e) => e.label == 'Change').length}',
+                                      const Color(0xFFF59E0B)),
+                                  const SizedBox(height: 12),
+                                  _statRow(
+                                      'Continue',
+                                      '${_edges.where((GraphEdge e) => e.label == 'Continue').length}',
+                                      const Color(0xFF3B82F6)),
                                 ],
                               ),
                             ),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildGraphCanvas()),
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileStatsStrip() {
+    final List<MapEntry<String, String>> stats = [
+      MapEntry('Meetings', '${max(0, _nodes.length - 1)}'),
+      MapEntry('Connections', '${_edges.length}'),
+      MapEntry('Applies',
+          '${_edges.where((GraphEdge e) => e.label == 'Applies').length}'),
+      MapEntry('Change',
+          '${_edges.where((GraphEdge e) => e.label == 'Change').length}'),
+      MapEntry('Continue',
+          '${_edges.where((GraphEdge e) => e.label == 'Continue').length}'),
+    ];
+    final List<Color> colors = [
+      AppColors.primaryBlue,
+      AppColors.statusApproved,
+      const Color(0xFF10B981),
+      const Color(0xFFF59E0B),
+      const Color(0xFF3B82F6),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: AppDecorations.cardWithBorder,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: List.generate(stats.length, (int i) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                stats[i].value,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: colors[i],
+                ),
+              ),
+              Text(
+                stats[i].key,
+                style: const TextStyle(
+                    fontSize: 10, color: AppColors.textSecondary),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildGraphCanvas() {
+    return Container(
+      decoration: AppDecorations.cardWithBorder,
+      clipBehavior: Clip.hardEdge,
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _nodes.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.account_tree_outlined,
+                          size: 48,
+                          color: AppColors.textMuted.withValues(alpha: 0.4)),
+                      const SizedBox(height: 12),
+                      const Text('No relationships found',
+                          style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSecondary)),
+                    ],
+                  ),
+                )
+              : GestureDetector(
+                  onScaleStart: (ScaleStartDetails details) {
+                    _lastFocalPoint = details.focalPoint;
+                  },
+                  onScaleUpdate: (ScaleUpdateDetails details) {
+                    if (_draggingNodeId == null) {
+                      setState(() {
+                        _panOffset +=
+                            (details.focalPoint - _lastFocalPoint) / _zoom;
+                        _lastFocalPoint = details.focalPoint;
+                        if (details.scale != 1.0) {
+                          _zoom =
+                              (_zoom * details.scale).clamp(0.4, 2.0);
+                        }
+                      });
+                    }
+                  },
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: GraphEdgePainter(
+                            nodes: _nodes,
+                            edges: _filteredEdges,
+                            panOffset: _panOffset,
+                            zoom: _zoom,
+                          ),
+                        ),
+                      ),
+                      ..._nodes.map((GraphNodeData node) {
+                        final Offset pos =
+                            (node.position + _panOffset) * _zoom;
+                        return Positioned(
+                          left: pos.dx,
+                          top: pos.dy,
+                          child: GestureDetector(
+                            onPanStart: (_) {
+                              setState(() {
+                                _draggingNodeId = node.id;
+                                node.isDragging = true;
+                                _isSimulating = false;
+                              });
+                            },
+                            onPanUpdate: (DragUpdateDetails details) {
+                              setState(() {
+                                node.position +=
+                                    details.delta / _zoom;
+                              });
+                            },
+                            onPanEnd: (_) {
+                              setState(() {
+                                _draggingNodeId = null;
+                                node.isDragging = false;
+                                node.velocity = Offset.zero;
+                                _isSimulating = true;
+                                _animController.repeat();
+                              });
+                            },
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.grab,
+                              child: GraphNodeWidget(node: node),
+                            ),
+                          ),
+                        );
+                      }),
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: Column(
+                          children: [
+                            _zoomButton(Icons.add, () {
+                              setState(() =>
+                                  _zoom = (_zoom + 0.1).clamp(0.4, 2.0));
+                            }),
+                            const SizedBox(height: 4),
+                            _zoomButton(Icons.remove, () {
+                              setState(() =>
+                                  _zoom = (_zoom - 0.1).clamp(0.4, 2.0));
+                            }),
+                            const SizedBox(height: 4),
+                            _zoomButton(Icons.center_focus_strong, () {
+                              setState(() {
+                                _panOffset = Offset.zero;
+                                _zoom = 1.0;
+                              });
+                            }),
                           ],
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+                ),
     );
   }
 
@@ -456,19 +557,11 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
   }
 
   List<Widget> _buildFilterChips() {
-    const List<String> types = [
-      'Implements',
-      'References',
-      'Supersedes',
-      'Supplements',
-      'Amends'
-    ];
+    const List<String> types = ['Applies', 'Change', 'Continue'];
     final Map<String, Color> colors = {
-      'Implements': const Color(0xFF10B981),
-      'References': const Color(0xFF3B82F6),
-      'Supersedes': const Color(0xFFF59E0B),
-      'Supplements': const Color(0xFF8B5CF6),
-      'Amends': const Color(0xFFEF4444),
+      'Applies': const Color(0xFF10B981),
+      'Change': const Color(0xFFF59E0B),
+      'Continue': const Color(0xFF3B82F6),
     };
 
     return types.map((String type) {
@@ -481,7 +574,8 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
               style: TextStyle(
                   fontSize: 11,
                   color: isActive ? chipColor : AppColors.textMuted,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400)),
+                  fontWeight:
+                      isActive ? FontWeight.w600 : FontWeight.w400)),
           selected: isActive,
           onSelected: (bool selected) {
             setState(() {
@@ -495,11 +589,14 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
           selectedColor: chipColor.withValues(alpha: 0.1),
           backgroundColor: Colors.white,
           side: BorderSide(
-              color: isActive ? chipColor.withValues(alpha: 0.4) : AppColors.border),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              color: isActive
+                  ? chipColor.withValues(alpha: 0.4)
+                  : AppColors.border),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
           showCheckmark: false,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
         ),
@@ -519,11 +616,9 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(
-          child: Text(label, style: AppTextStyles.caption),
-        ),
+        Expanded(child: Text(label, style: AppTextStyles.caption)),
         Text(value,
-            style: TextStyle(
+            style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary)),

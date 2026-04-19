@@ -84,6 +84,22 @@ class MeetingService {
     }
   }
 
+  Future<List<MeetingRelationship>> getMeetingRelationships(int meetingId) async {
+    try {
+      final response = await _api.get('/meetings/Relationships?meetingID=$meetingId');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+        return data
+            .map((dynamic e) =>
+                MeetingRelationship.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   /// Calls the BM25 search endpoint. Returns meeting IDs ranked by relevance,
   /// or null if the request failed (so callers can fall back to local filtering).
   Future<List<int>?> searchMeetings(String query) async {

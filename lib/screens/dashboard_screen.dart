@@ -73,189 +73,213 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.pageBg,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Welcome section
-            _animatedSection(
-              0,
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Welcome back, Dr. Abdulla Guest',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "Here's what's happening with your meeting processes today.",
-                    style: TextStyle(
-                        fontSize: 13, color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool isMobile = constraints.maxWidth < 600;
+        final EdgeInsets padding = EdgeInsets.all(isMobile ? 16 : 28);
 
-            // CTA banner
-            _animatedSection(1, _buildCtaBanner(context)),
-            const SizedBox(height: 24),
-
-            // Quick stats row
-            _animatedSection(2, _buildStatsRow()),
-            const SizedBox(height: 28),
-
-            // Two-column meetings sections
-            _animatedSection(
-              3,
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left column
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Meetings by Signature',
-                            style: AppTextStyles.heading3),
-                        const SizedBox(height: 4),
-                        Text('Meetings awaiting your signature',
-                            style: AppTextStyles.bodySmall),
-                        const SizedBox(height: 14),
-                        MeetingCard(
-                          title: 'Department Safety Review',
-                          subtitle: 'Review safety protocols and compliance',
-                          date: DateTime(2025, 10, 15),
-                          status: 0,
-                          onTap: () => context.go('/review'),
-                        ),
-                        const SizedBox(height: 10),
-                        MeetingCard(
-                          title: 'Research Collaboration Proposal',
-                          subtitle: 'Cross-department research initiative',
-                          date: DateTime(2025, 11, 3),
-                          status: 0,
-                          onTap: () => context.go('/review'),
-                        ),
-                        const SizedBox(height: 10),
-                        MeetingCard(
-                          title: 'Student Affairs Committee Meeting',
-                          subtitle: 'Student welfare and academic support',
-                          date: DateTime(2025, 9, 28),
-                          status: 0,
-                          onTap: () => context.go('/review'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  // Right column
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text("Meetings Needing Others' Signatures",
-                            style: AppTextStyles.heading3),
-                        const SizedBox(height: 4),
-                        Text('Tracking signature progress',
-                            style: AppTextStyles.bodySmall),
-                        const SizedBox(height: 14),
-                        MeetingCard(
-                          title: 'Curriculum Review Committee Meeting',
-                          subtitle: 'Annual curriculum assessment',
-                          date: DateTime(2025, 10, 20),
-                          status: 1,
-                          progress: 0.75,
-                        ),
-                        const SizedBox(height: 10),
-                        MeetingCard(
-                          title: 'Annual Budget Planning Session',
-                          subtitle: 'FY2026 budget allocation',
-                          date: DateTime(2025, 11, 8),
-                          status: 1,
-                          progress: 0.4,
-                        ),
-                        const SizedBox(height: 10),
-                        MeetingCard(
-                          title: 'Faculty Hiring Committee Update',
-                          subtitle: 'New faculty recruitment',
-                          date: DateTime(2025, 10, 5),
-                          status: 1,
-                          progress: 0.6,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // Recently Archived
-            _animatedSection(
-              4,
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Recently Archived Meetings',
-                      style: AppTextStyles.heading3),
-                  const SizedBox(height: 14),
-                  Row(
+        return Container(
+          color: AppColors.pageBg,
+          child: SingleChildScrollView(
+            padding: padding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _animatedSection(
+                  0,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: _buildArchivedCard(
-                          'Q3 Department Review',
-                          DateTime(2025, 9, 15),
+                      Text(
+                        'Welcome back, Dr. Abdulla Guest',
+                        style: TextStyle(
+                          fontSize: isMobile ? 18 : 22,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildArchivedCard(
-                          'Lab Equipment Procurement',
-                          DateTime(2025, 8, 22),
-                        ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "Here's what's happening with your meeting processes today.",
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.textSecondary),
                       ),
-                      const SizedBox(width: 16),
-                      const Expanded(child: SizedBox()),
                     ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 24),
+
+                _animatedSection(1, _buildCtaBanner(context, isMobile)),
+                const SizedBox(height: 24),
+
+                _animatedSection(2, _buildStatsGrid(isMobile)),
+                const SizedBox(height: 28),
+
+                _animatedSection(
+                  3,
+                  _buildMeetingsSection(context, isMobile),
+                ),
+                const SizedBox(height: 28),
+
+                _animatedSection(
+                  4,
+                  _buildArchivedSection(isMobile),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildCtaBanner(BuildContext context) {
+  Widget _buildMeetingsSection(BuildContext context, bool isMobile) {
+    final Widget leftCol = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Meetings by Signature', style: AppTextStyles.heading3),
+        const SizedBox(height: 4),
+        Text('Meetings awaiting your signature',
+            style: AppTextStyles.bodySmall),
+        const SizedBox(height: 14),
+        MeetingCard(
+          title: 'Department Safety Review',
+          subtitle: 'Review safety protocols and compliance',
+          date: DateTime(2025, 10, 15),
+          status: 0,
+          onTap: () => context.go('/review'),
+        ),
+        const SizedBox(height: 10),
+        MeetingCard(
+          title: 'Research Collaboration Proposal',
+          subtitle: 'Cross-department research initiative',
+          date: DateTime(2025, 11, 3),
+          status: 0,
+          onTap: () => context.go('/review'),
+        ),
+        const SizedBox(height: 10),
+        MeetingCard(
+          title: 'Student Affairs Committee Meeting',
+          subtitle: 'Student welfare and academic support',
+          date: DateTime(2025, 9, 28),
+          status: 0,
+          onTap: () => context.go('/review'),
+        ),
+      ],
+    );
+
+    final Widget rightCol = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Meetings Needing Others' Signatures",
+            style: AppTextStyles.heading3),
+        const SizedBox(height: 4),
+        Text('Tracking signature progress', style: AppTextStyles.bodySmall),
+        const SizedBox(height: 14),
+        MeetingCard(
+          title: 'Curriculum Review Committee Meeting',
+          subtitle: 'Annual curriculum assessment',
+          date: DateTime(2025, 10, 20),
+          status: 1,
+          progress: 0.75,
+        ),
+        const SizedBox(height: 10),
+        MeetingCard(
+          title: 'Annual Budget Planning Session',
+          subtitle: 'FY2026 budget allocation',
+          date: DateTime(2025, 11, 8),
+          status: 1,
+          progress: 0.4,
+        ),
+        const SizedBox(height: 10),
+        MeetingCard(
+          title: 'Faculty Hiring Committee Update',
+          subtitle: 'New faculty recruitment',
+          date: DateTime(2025, 10, 5),
+          status: 1,
+          progress: 0.6,
+        ),
+      ],
+    );
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          leftCol,
+          const SizedBox(height: 24),
+          rightCol,
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: leftCol),
+        const SizedBox(width: 20),
+        Expanded(child: rightCol),
+      ],
+    );
+  }
+
+  Widget _buildArchivedSection(bool isMobile) {
+    final Widget card1 = _buildArchivedCard(
+      'Q3 Department Review',
+      DateTime(2025, 9, 15),
+    );
+    final Widget card2 = _buildArchivedCard(
+      'Lab Equipment Procurement',
+      DateTime(2025, 8, 22),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Recently Archived Meetings',
+            style: AppTextStyles.heading3),
+        const SizedBox(height: 14),
+        if (isMobile)
+          Column(
+            children: [
+              card1,
+              const SizedBox(height: 12),
+              card2,
+            ],
+          )
+        else
+          Row(
+            children: [
+              Expanded(child: card1),
+              const SizedBox(width: 16),
+              Expanded(child: card2),
+              const SizedBox(width: 16),
+              const Expanded(child: SizedBox()),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCtaBanner(BuildContext context, bool isMobile) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+      padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 18 : 28, vertical: isMobile ? 16 : 22),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [AppColors.primaryTeal, const Color(0xFF1F6364)],
         ),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
+      child: isMobile
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Create a Meeting Summary',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,
                   ),
@@ -268,37 +292,97 @@ class _DashboardScreenState extends State<DashboardScreen>
                     color: Colors.white.withValues(alpha: 0.85),
                   ),
                 ),
+                const SizedBox(height: 14),
+                WaveScrollButton(
+                  text: 'Get Started',
+                  icon: Icons.arrow_forward,
+                  onPressed: () => context.go('/create'),
+                  backgroundColor: Colors.white,
+                  foregroundColor: AppColors.primaryTeal,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Create a Meeting Summary',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Draft and prepare meeting minutes for digital signatures',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                WaveScrollButton(
+                  text: 'Get Started',
+                  icon: Icons.arrow_forward,
+                  onPressed: () => context.go('/create'),
+                  backgroundColor: Colors.white,
+                  foregroundColor: AppColors.primaryTeal,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
               ],
             ),
-          ),
-          WaveScrollButton(
-            text: 'Get Started',
-            icon: Icons.arrow_forward,
-            onPressed: () => context.go('/create'),
-            backgroundColor: Colors.white,
-            foregroundColor: AppColors.primaryTeal,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildStatsRow() {
+  Widget _buildStatsGrid(bool isMobile) {
+    final List<Widget> cards = [
+      _buildStatCard(Icons.description_outlined, 'Meeting Drafts', '3',
+          AppColors.primaryTeal),
+      _buildStatCard(Icons.draw_outlined, 'My Signatures', '5',
+          AppColors.statusPending),
+      _buildStatCard(Icons.access_time, 'Recently Active', '8',
+          AppColors.statusApproved),
+      _buildStatCard(
+          Icons.history, 'Past Meetings', '24', AppColors.statusFinalized),
+    ];
+
+    if (isMobile) {
+      return Column(
+        children: [
+          Row(children: [
+            Expanded(child: cards[0]),
+            const SizedBox(width: 12),
+            Expanded(child: cards[1]),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: cards[2]),
+            const SizedBox(width: 12),
+            Expanded(child: cards[3]),
+          ]),
+        ],
+      );
+    }
+
     return Row(
       children: [
-        _buildStatCard(Icons.description_outlined, 'Meeting Drafts', '3',
-            AppColors.primaryTeal),
+        Expanded(child: cards[0]),
         const SizedBox(width: 14),
-        _buildStatCard(Icons.draw_outlined, 'My Signatures', '5',
-            AppColors.statusPending),
+        Expanded(child: cards[1]),
         const SizedBox(width: 14),
-        _buildStatCard(Icons.access_time, 'Recently Active', '8',
-            AppColors.statusApproved),
+        Expanded(child: cards[2]),
         const SizedBox(width: 14),
-        _buildStatCard(Icons.history, 'Past Meetings', '24',
-            AppColors.statusFinalized),
-      ].map((Widget w) => w is SizedBox ? w : Expanded(child: w)).toList(),
+        Expanded(child: cards[3]),
+      ],
     );
   }
 

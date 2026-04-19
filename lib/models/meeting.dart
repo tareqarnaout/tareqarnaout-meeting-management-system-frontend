@@ -12,10 +12,11 @@ class Meeting {
   final List<Signatory> signatories;
   final List<MeetingConnection> connections;
   final List<int> requiredSignatures;
-  final List<String> recipients;
+  final List<int> recipients;
   final String? sessionNumber;
   final String? decisionNumber;
   final String? councilType;
+  final List<Map<String, dynamic>> relationships;
 
   Meeting({
     this.id,
@@ -35,6 +36,7 @@ class Meeting {
     this.sessionNumber,
     this.decisionNumber,
     this.councilType,
+    this.relationships = const [],
   });
 
   factory Meeting.fromJson(Map<String, dynamic> json) {
@@ -64,7 +66,7 @@ class Meeting {
               .toList() ??
           [],
       recipients: (json['recipients'] as List<dynamic>?)
-              ?.map((dynamic e) => e as String)
+              ?.map((dynamic e) => e as int)
               .toList() ??
           [],
       sessionNumber: json['sessionNumber'] as String?,
@@ -75,17 +77,19 @@ class Meeting {
 
   Map<String, dynamic> toJson() {
     return {
-      if (id != null) 'id': id,
       'title': title,
       'meetingDate': meetingDate.toIso8601String(),
-      'agenda': agenda ?? '',
       'meetingContent': meetingContent ?? '',
       'status': status,
+      'signatureNeededCount': requiredSignatures.length,
       'requiredSignatures': requiredSignatures,
       'recipients': recipients,
-      if (sessionNumber != null) 'sessionNumber': sessionNumber,
-      if (decisionNumber != null) 'decisionNumber': decisionNumber,
+      if (sessionNumber != null)
+        'sessionNumber': int.tryParse(sessionNumber!) ?? 0,
+      if (decisionNumber != null)
+        'decisionNumber': int.tryParse(decisionNumber!) ?? 0,
       if (councilType != null) 'councilType': councilType,
+      if (relationships.isNotEmpty) 'relationships': relationships,
     };
   }
 }
@@ -177,6 +181,39 @@ class MeetingConnection {
       meetingId: json['meetingId'] as int?,
       meetingTitle: json['meetingTitle'] as String?,
       relationshipType: json['relationshipType'] as String? ?? '',
+    );
+  }
+}
+
+class MeetingRelationship {
+  final int meetingId;
+  final String title;
+  final DateTime meetingDate;
+  final String type; // 'Applies', 'Change', 'Continue'
+
+  MeetingRelationship({
+    required this.meetingId,
+    required this.title,
+    required this.meetingDate,
+    required this.type,
+  });
+
+  static const Map<int, String> _typeNames = {
+    0: 'Applies',
+    1: 'Change',
+    2: 'Continue',
+  };
+
+  factory MeetingRelationship.fromJson(Map<String, dynamic> json) {
+    final dynamic rawType = json['type'];
+    final String typeName = rawType is int
+        ? (_typeNames[rawType] ?? 'Applies')
+        : (rawType as String? ?? 'Applies');
+    return MeetingRelationship(
+      meetingId: (json['relatedMeetingId'] ?? json['meetingId']) as int,
+      title: json['title'] as String? ?? '',
+      meetingDate: DateTime.parse(json['meetingDate'] as String),
+      type: typeName,
     );
   }
 }

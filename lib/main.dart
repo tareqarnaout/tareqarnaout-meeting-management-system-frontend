@@ -48,8 +48,10 @@ final GoRouter _router = GoRouter(
         GoRoute(
           path: '/graph',
           builder: (BuildContext context, GoRouterState state) {
-            final String? meeting = state.uri.queryParameters['meeting'];
-            return DecisionGraphScreen(focusMeeting: meeting);
+            final String? meetingParam = state.uri.queryParameters['meeting'];
+            final int? meetingId =
+                meetingParam != null ? int.tryParse(meetingParam) : null;
+            return DecisionGraphScreen(meetingId: meetingId);
           },
         ),
         GoRoute(

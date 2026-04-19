@@ -4,13 +4,15 @@ import '../constants/app_theme.dart';
 import '../services/auth_service.dart';
 
 class AppHeader extends StatelessWidget {
-  const AppHeader({super.key});
+  final bool showMenuButton;
+
+  const AppHeader({super.key, this.showMenuButton = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: AppColors.headerBg,
         border: Border(
@@ -19,26 +21,29 @@ class AppHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Logo text
-          Row(
-            children: [
-              Image.asset(
-                'assets/psutLogo.png',
-                width: 32,
-                height: 32,
-                filterQuality: FilterQuality.high,
+          if (showMenuButton)
+            IconButton(
+              icon: const Icon(Icons.menu, color: AppColors.textPrimary),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+              tooltip: 'Open menu',
+            )
+          else ...[
+            Image.asset(
+              'assets/psutLogo.png',
+              width: 32,
+              height: 32,
+              filterQuality: FilterQuality.high,
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'Post-Meeting Management System',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
               ),
-              const SizedBox(width: 10),
-              const Text(
-                'Post-Meeting Management System',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
           const Spacer(),
           // Notification bell
           IconButton(

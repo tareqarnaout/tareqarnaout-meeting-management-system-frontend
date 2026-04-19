@@ -30,8 +30,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       TextEditingController();
   final TextEditingController _meetingDateController = TextEditingController();
   final TextEditingController _decisionTextController = TextEditingController();
-  final TextEditingController _connectionSearchController =
-      TextEditingController();
+  final TextEditingController _connectionIdController = TextEditingController();
   final TextEditingController _copyToController = TextEditingController();
 
   final MeetingService _meetingService = MeetingService();
@@ -41,25 +40,14 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
   DateTime? _selectedMeetingDate;
   bool _isSubmitting = false;
 
-  final List<String> _recipients = [
-    'الأستاذ الدكتور عميد الكلية المحترم',
-    'السادة أعضاء هيئة التدريس المحترمون',
-  ];
-  final TextEditingController _newRecipientController = TextEditingController();
+  final List<Map<String, dynamic>> _selectedRecipients = [];
+  List<Map<String, dynamic>> _filteredRecipientUsers = [];
+  bool _showRecipientResults = false;
+  final TextEditingController _recipientSearchController = TextEditingController();
 
-  // Connection search state
-  bool _showConnectionResults = false;
-  List<_SearchableMeeting> _connectionSearchResults = [];
+  // Connection manual-entry state
+  String _selectedRelationshipType = 'Applies';
   final List<_AddedConnection> _addedConnections = [];
-
-  final List<_SearchableMeeting> _allMeetings = [
-    _SearchableMeeting(id: 1, title: 'Department Budget Review', date: DateTime(2025, 10, 15), status: 2, type: 'Department'),
-    _SearchableMeeting(id: 2, title: 'Monthly Staff Meeting', date: DateTime(2025, 10, 1), status: 2, type: 'Administrative'),
-    _SearchableMeeting(id: 3, title: 'Faculty Curriculum Update', date: DateTime(2025, 9, 20), status: 2, type: 'Faculty'),
-    _SearchableMeeting(id: 4, title: 'Committee Review Q3', date: DateTime(2025, 9, 10), status: 1, type: 'Committee'),
-    _SearchableMeeting(id: 5, title: 'IT Infrastructure Planning', date: DateTime(2025, 8, 28), status: 0, type: 'Department'),
-    _SearchableMeeting(id: 6, title: 'Annual Performance Review', date: DateTime(2025, 8, 15), status: 2, type: 'Administrative'),
-  ];
 
   // Copy-to list
   final List<String> _copyToList = [];
@@ -129,69 +117,69 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     });
   }
 
-  void _onConnectionSearchChanged(String query) {
+  void _onRecipientSearchChanged(String query) {
     if (query.trim().isEmpty) {
       setState(() {
-        _showConnectionResults = false;
-        _connectionSearchResults = [];
+        _showRecipientResults = false;
+        _filteredRecipientUsers = [];
       });
       return;
     }
     final String lowerQuery = query.toLowerCase();
-    final List<int> addedIds =
-        _addedConnections.map((_AddedConnection c) => c.meeting.id).toList();
+    final List<int> selectedIds = _selectedRecipients
+        .map((Map<String, dynamic> u) => u['id'] as int)
+        .toList();
     setState(() {
-      _connectionSearchResults = _allMeetings
-          .where((_SearchableMeeting m) =>
-              !addedIds.contains(m.id) &&
-              (m.title.toLowerCase().contains(lowerQuery) ||
-                  m.type.toLowerCase().contains(lowerQuery)))
-          .toList();
-      _showConnectionResults = true;
+      _filteredRecipientUsers = _allUsers.where((Map<String, dynamic> u) {
+        final int id = u['id'] as int;
+        final String name =
+            (u['fullName'] as String? ?? u['email'] as String? ?? '')
+                .toLowerCase();
+        return !selectedIds.contains(id) && name.contains(lowerQuery);
+      }).toList();
+      _showRecipientResults = true;
     });
   }
 
-  void _addConnection(_SearchableMeeting meeting, String relationshipType) {
+  void _addRecipient(Map<String, dynamic> user) {
     setState(() {
-      _addedConnections.add(
-          _AddedConnection(meeting: meeting, relationshipType: relationshipType));
-      _connectionSearchController.clear();
-      _showConnectionResults = false;
-      _connectionSearchResults = [];
+      _selectedRecipients.add(user);
+      _recipientSearchController.clear();
+      _showRecipientResults = false;
+      _filteredRecipientUsers = [];
+    });
+  }
+
+  void _removeRecipient(int userId) {
+    setState(() {
+      _selectedRecipients
+          .removeWhere((Map<String, dynamic> u) => u['id'] == userId);
+    });
+  }
+
+  void _addConnectionById() {
+    final String raw = _connectionIdController.text.trim();
+    final int? id = int.tryParse(raw);
+    if (id == null || id <= 0) {
+      _showSnack('يرجى إدخال رقم اجتماع صحيح.');
+      return;
+    }
+    if (_addedConnections.any((_AddedConnection c) => c.meetingId == id)) {
+      _showSnack('هذا الاجتماع مضاف بالفعل.');
+      return;
+    }
+    setState(() {
+      _addedConnections.add(_AddedConnection(
+          meetingId: id, relationshipType: _selectedRelationshipType));
+      _connectionIdController.clear();
     });
   }
 
   void _removeConnection(int meetingId) {
     setState(() {
       _addedConnections
-          .removeWhere((_AddedConnection c) => c.meeting.id == meetingId);
+          .removeWhere((_AddedConnection c) => c.meetingId == meetingId);
     });
-  }
-
-  String _statusLabel(int status) {
-    switch (status) {
-      case 0:
-        return 'Draft';
-      case 1:
-        return 'Pending';
-      case 2:
-        return 'Finalized';
-      default:
-        return 'Unknown';
-    }
-  }
-
-  Color _statusColor(int status) {
-    switch (status) {
-      case 0:
-        return AppColors.statusDraft;
-      case 1:
-        return AppColors.statusPending;
-      case 2:
-        return AppColors.statusFinalized;
-      default:
-        return AppColors.textMuted;
-    }
   }
 
   @override
@@ -204,9 +192,9 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     _decisionNumberController.dispose();
     _meetingDateController.dispose();
     _decisionTextController.dispose();
-    _connectionSearchController.dispose();
+    _connectionIdController.dispose();
     _copyToController.dispose();
-    _newRecipientController.dispose();
+    _recipientSearchController.dispose();
     _signatorySearchController.dispose();
     super.dispose();
   }
@@ -271,6 +259,12 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
         ? _meetingTitleController.text.trim()
         : _selectedCouncilType;
 
+    const Map<String, int> _typeToInt = {
+      'Applies': 0,
+      'Change': 1,
+      'Continue': 2,
+    };
+
     final Meeting meeting = Meeting(
       title: meetingTitle,
       meetingDate: _selectedMeetingDate ?? _selectedIssueDate ?? DateTime.now(),
@@ -279,10 +273,18 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       requiredSignatures: _selectedSignatories
           .map((Map<String, dynamic> u) => u['id'] as int)
           .toList(),
-      recipients: List<String>.from(_recipients),
+      recipients: _selectedRecipients
+          .map((Map<String, dynamic> u) => u['id'] as int)
+          .toList(),
       sessionNumber: _sessionNumberController.text.trim(),
       decisionNumber: _decisionNumberController.text.trim(),
       councilType: _selectedCouncilType,
+      relationships: _addedConnections
+          .map((_AddedConnection c) => <String, dynamic>{
+                'relatedMeetingId': c.meetingId,
+                'type': _typeToInt[c.relationshipType] ?? 0,
+              })
+          .toList(),
     );
 
     final bool ok = await _meetingService.createMeeting(meeting);
@@ -547,58 +549,189 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
           // Recipients
           _buildSectionCard(
             title: 'المستلمون',
-            subtitle: 'قائمة الأشخاص المذكورين في ترويسة الوثيقة.',
+            subtitle: 'ابحث وأضف الأشخاص الذين سيستلمون هذه الوثيقة.',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ..._recipients.asMap().entries.map((MapEntry<int, String> entry) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                TextField(
+                  controller: _recipientSearchController,
+                  onChanged: _onRecipientSearchChanged,
+                  decoration: AppDecorations.inputDecoration(
+                    '',
+                    hint: 'ابحث بالاسم...',
+                    prefixIcon: const Icon(Icons.search,
+                        size: 18, color: AppColors.textMuted),
+                  ).copyWith(labelText: null),
+                ),
+                if (_showRecipientResults)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    constraints: const BoxConstraints(maxHeight: 200),
                     decoration: BoxDecoration(
-                      color: AppColors.pageBg,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            entry.value,
-                            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () => setState(() => _recipients.removeAt(entry.key)),
-                          child: const Icon(Icons.close, size: 16, color: AppColors.textMuted),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                  );
-                }),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _newRecipientController,
-                        decoration: AppDecorations.inputDecoration(
-                          '',
-                          hint: 'أضف مستلماً جديداً',
-                          prefixIcon: const Icon(Icons.person_add_outlined,
-                              size: 18, color: AppColors.textMuted),
-                        ).copyWith(labelText: null),
-                        onSubmitted: (_) => _addRecipient(),
+                    child: _filteredRecipientUsers.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('لم يتم العثور على مستخدمين.',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textMuted)),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            itemCount: _filteredRecipientUsers.length,
+                            separatorBuilder:
+                                (BuildContext context, int index) =>
+                                    const Divider(
+                                        height: 1, color: AppColors.divider),
+                            itemBuilder: (BuildContext context, int index) {
+                              final Map<String, dynamic> user =
+                                  _filteredRecipientUsers[index];
+                              final String name = user['fullName'] as String? ??
+                                  user['email'] as String? ??
+                                  'User #${user['id']}';
+                              final String email =
+                                  user['email'] as String? ?? '';
+                              return InkWell(
+                                onTap: () => _addRecipient(user),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 10),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 16,
+                                        backgroundColor: AppColors.primaryTeal
+                                            .withValues(alpha: 0.1),
+                                        child: Text(
+                                          name.isNotEmpty
+                                              ? name.characters.first
+                                              : '?',
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.primaryTeal),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(name,
+                                                style: const TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w500,
+                                                    color:
+                                                        AppColors.textPrimary)),
+                                            if (email.isNotEmpty)
+                                              Text(email,
+                                                  style: const TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppColors
+                                                          .textSecondary)),
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(Icons.add_circle_outline,
+                                          size: 18, color: AppColors.primaryTeal),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                if (_selectedRecipients.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: Text('لم تتم إضافة مستلمين بعد.',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color:
+                                  AppColors.textMuted.withValues(alpha: 0.7))),
+                    ),
+                  )
+                else ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    '${_selectedRecipients.length} مستلم مضاف',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._selectedRecipients
+                      .map((Map<String, dynamic> user) {
+                    final String name = user['fullName'] as String? ??
+                        user['email'] as String? ??
+                        'User #${user['id']}';
+                    final String email = user['email'] as String? ?? '';
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.pageBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: AppColors.border.withValues(alpha: 0.6)),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      onPressed: _addRecipient,
-                      icon: const Icon(Icons.add_circle_outline, color: AppColors.primaryTeal),
-                      tooltip: 'إضافة',
-                    ),
-                  ],
-                ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor:
+                                AppColors.primaryTeal.withValues(alpha: 0.1),
+                            child: Text(
+                              name.isNotEmpty ? name.characters.first : '?',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primaryTeal),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name,
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppColors.textPrimary)),
+                                if (email.isNotEmpty)
+                                  Text(email,
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _removeRecipient(user['id'] as int),
+                            child: const Icon(Icons.close,
+                                size: 16, color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
               ],
             ),
           ),
@@ -646,56 +779,85 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
-                  controller: _connectionSearchController,
-                  onChanged: _onConnectionSearchChanged,
-                  decoration: AppDecorations.inputDecoration(
-                    '',
-                    hint: 'إضافة ارتباط باجتماع سابق',
-                    prefixIcon: const Icon(Icons.add,
-                        size: 18, color: AppColors.textMuted),
-                  ).copyWith(labelText: null),
-                ),
-                if (_showConnectionResults)
-                  Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    constraints: const BoxConstraints(maxHeight: 240),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: _connectionIdController,
+                        keyboardType: TextInputType.number,
+                        decoration: AppDecorations.inputDecoration(
+                          '',
+                          hint: 'رقم الاجتماع (ID)',
+                          prefixIcon: const Icon(Icons.tag,
+                              size: 16, color: AppColors.textMuted),
+                        ).copyWith(labelText: null),
+                        onSubmitted: (_) => _addConnectionById(),
+                      ),
                     ),
-                    child: _connectionSearchResults.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text(
-                              'لم يتم العثور على اجتماعات مطابقة.',
-                              style: TextStyle(
-                                  fontSize: 13, color: AppColors.textMuted),
-                            ),
-                          )
-                        : ListView.separated(
-                            shrinkWrap: true,
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            itemCount: _connectionSearchResults.length,
-                            separatorBuilder:
-                                (BuildContext context, int index) =>
-                                    const Divider(
-                                        height: 1, color: AppColors.divider),
-                            itemBuilder: (BuildContext context, int index) {
-                              final _SearchableMeeting meeting =
-                                  _connectionSearchResults[index];
-                              return _buildSearchResultTile(meeting);
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.border),
+                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.white,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedRelationshipType,
+                            isExpanded: true,
+                            style: const TextStyle(
+                                fontSize: 13, color: AppColors.textPrimary),
+                            icon: const Icon(Icons.keyboard_arrow_down,
+                                size: 18, color: AppColors.textMuted),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'Applies',
+                                child: Text('Applies — يطبق'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Change',
+                                child: Text('Change — يعدل'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Continue',
+                                child: Text('Continue — يكمل'),
+                              ),
+                            ],
+                            onChanged: (String? value) {
+                              if (value != null) {
+                                setState(
+                                    () => _selectedRelationshipType = value);
+                              }
                             },
                           ),
-                  ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: _addConnectionById,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('إضافة'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryTeal,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 if (_addedConnections.isEmpty)
                   Center(
@@ -1028,7 +1190,10 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       meetingTitle: _meetingTitleController.text.trim(),
       referenceNumber: _referenceNumberController.text.trim(),
       issueDate: issueDateFormatted,
-      recipients: List<String>.from(_recipients),
+      recipients: _selectedRecipients
+          .map((Map<String, dynamic> u) =>
+              u['fullName'] as String? ?? u['email'] as String? ?? 'User #${u['id']}')
+          .toList(),
       councilType: _selectedCouncilType,
       sessionNumber: _sessionNumberController.text.trim(),
       academicYear: _academicYearController.text.trim(),
@@ -1103,14 +1268,6 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     );
   }
 
-  void _addRecipient() {
-    final String text = _newRecipientController.text.trim();
-    if (text.isEmpty) return;
-    setState(() {
-      _recipients.add(text);
-      _newRecipientController.clear();
-    });
-  }
 
   void _addCopyTo() {
     final String text = _copyToController.text.trim();
@@ -1143,156 +1300,8 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     );
   }
 
-  Widget _buildSearchResultTile(_SearchableMeeting meeting) {
-    final String formattedDate =
-        DateFormat('MMM dd, yyyy').format(meeting.date);
-    final String status = _statusLabel(meeting.status);
-    final Color statusClr = _statusColor(meeting.status);
-
-    return InkWell(
-      onTap: () => _showRelationshipPicker(meeting),
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: AppColors.primaryTeal.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.description_outlined,
-                  size: 16, color: AppColors.primaryTeal),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(meeting.title,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textPrimary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today_outlined,
-                          size: 11, color: AppColors.textMuted),
-                      const SizedBox(width: 4),
-                      Text(formattedDate,
-                          style: const TextStyle(
-                              fontSize: 11, color: AppColors.textSecondary)),
-                      const SizedBox(width: 10),
-                      const Icon(Icons.folder_outlined,
-                          size: 11, color: AppColors.textMuted),
-                      const SizedBox(width: 4),
-                      Text(meeting.type,
-                          style: const TextStyle(
-                              fontSize: 11, color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: statusClr.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(status,
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: statusClr)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showRelationshipPicker(_SearchableMeeting meeting) {
-    showDialog(
-      context: context,
-      builder: (BuildContext ctx) {
-        return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: const Text('نوع الارتباط',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('ما علاقة "${meeting.title}" بهذا الاجتماع؟',
-                  style: const TextStyle(
-                      fontSize: 13, color: AppColors.textSecondary)),
-              const SizedBox(height: 16),
-              _relationshipOption(ctx, meeting, 'متابعة',
-                  Icons.arrow_forward_rounded, 'هذا الاجتماع يكمل الاجتماع المحدد'),
-              const SizedBox(height: 8),
-              _relationshipOption(ctx, meeting, 'ذو صلة', Icons.link,
-                  'يشترك في مواضيع أو قرارات مع هذا الاجتماع'),
-              const SizedBox(height: 8),
-              _relationshipOption(ctx, meeting, 'يحل محل',
-                  Icons.swap_horiz_rounded, 'هذا الاجتماع يلغي أو يحل محل المحدد'),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _relationshipOption(BuildContext ctx, _SearchableMeeting meeting,
-      String type, IconData icon, String description) {
-    return InkWell(
-      onTap: () {
-        Navigator.of(ctx).pop();
-        _addConnection(meeting, type);
-      },
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: AppColors.primaryTeal),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(type,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textPrimary)),
-                  Text(description,
-                      style: const TextStyle(
-                          fontSize: 11, color: AppColors.textMuted)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildConnectionCard(_AddedConnection conn) {
-    final String formattedDate =
-        DateFormat('MMM dd, yyyy').format(conn.meeting.date);
-    final String status = _statusLabel(conn.meeting.status);
-    final Color statusClr = _statusColor(conn.meeting.status);
+    final Color typeColor = _relationshipTypeColor(conn.relationshipType);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1319,54 +1328,30 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(conn.meeting.title,
+                Text('Meeting #${conn.meetingId}',
                     style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: AppColors.textPrimary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                        color: AppColors.textPrimary)),
                 const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Text(formattedDate,
-                        style: const TextStyle(
-                            fontSize: 11, color: AppColors.textSecondary)),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: statusClr.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(status,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: statusClr)),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryTeal.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(conn.relationshipType,
-                          style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.primaryTeal)),
-                    ),
-                  ],
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: typeColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(conn.relationshipType,
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: typeColor)),
                 ),
               ],
             ),
           ),
           IconButton(
-            onPressed: () => _removeConnection(conn.meeting.id),
+            onPressed: () => _removeConnection(conn.meetingId),
             icon:
                 const Icon(Icons.close, size: 16, color: AppColors.textMuted),
             splashRadius: 16,
@@ -1374,6 +1359,19 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
         ],
       ),
     );
+  }
+
+  Color _relationshipTypeColor(String type) {
+    switch (type) {
+      case 'Applies':
+        return const Color(0xFF10B981);
+      case 'Change':
+        return const Color(0xFFF59E0B);
+      case 'Continue':
+        return const Color(0xFF3B82F6);
+      default:
+        return AppColors.primaryTeal;
+    }
   }
 
   Widget _buildSectionCard({
@@ -1412,28 +1410,12 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
   }
 }
 
-class _SearchableMeeting {
-  final int id;
-  final String title;
-  final DateTime date;
-  final int status;
-  final String type;
-
-  const _SearchableMeeting({
-    required this.id,
-    required this.title,
-    required this.date,
-    required this.status,
-    required this.type,
-  });
-}
-
 class _AddedConnection {
-  final _SearchableMeeting meeting;
+  final int meetingId;
   final String relationshipType;
 
   const _AddedConnection({
-    required this.meeting,
+    required this.meetingId,
     required this.relationshipType,
   });
 }

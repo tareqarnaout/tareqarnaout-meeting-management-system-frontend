@@ -151,384 +151,437 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
     final List<ArchivedMeeting> meetings = _filteredMeetings;
     final DateFormat dateFmt = DateFormat('MMM dd, yyyy');
 
-    return Container(
-      color: AppColors.pageBg,
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title
-            const Text('Archived Meetings', style: AppTextStyles.heading1),
-            const SizedBox(height: 4),
-            const Text(
-              'Browse and search all finalized meeting summaries',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 20),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool isMobile = constraints.maxWidth < 600;
 
-            // Search & Filter card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: AppDecorations.cardWithBorder,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Search & Filter',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary)),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Find specific meeting summaries using search and filters',
-                    style:
-                        TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
+        return Container(
+          color: AppColors.pageBg,
+          child: Padding(
+            padding: EdgeInsets.all(isMobile ? 16 : 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Archived Meetings', style: AppTextStyles.heading1),
+                const SizedBox(height: 4),
+                const Text(
+                  'Browse and search all finalized meeting summaries',
+                  style:
+                      TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 20),
+
+                // Search & Filter card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: AppDecorations.cardWithBorder,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        flex: 4,
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: _onSearchChanged,
-                          decoration: AppDecorations.inputDecoration(
-                            '',
-                            hint: 'Search by title, keywords, or topics...',
-                            prefixIcon: _isSearching
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    ),
-                                  )
-                                : const Icon(Icons.search,
-                                    size: 18, color: AppColors.textMuted),
-                          ).copyWith(labelText: null),
-                        ),
+                      const Text('Search & Filter',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary)),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Find specific meeting summaries using search and filters',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
                       ),
-                      const SizedBox(width: 12),
-                      _buildDropdown(
-                        value: _typeFilter,
-                        items: _availableTypes,
-                        onChanged: (String? v) =>
-                            setState(() => _typeFilter = v ?? 'All Types'),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _searchController,
+                        onChanged: _onSearchChanged,
+                        decoration: AppDecorations.inputDecoration(
+                          '',
+                          hint: 'Search by title, keywords, or topics...',
+                          prefixIcon: _isSearching
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                )
+                              : const Icon(Icons.search,
+                                  size: 18, color: AppColors.textMuted),
+                        ).copyWith(labelText: null),
                       ),
-                      const SizedBox(width: 10),
-                      _buildDropdown(
-                        value: _departmentFilter,
-                        items: _availableDepartments,
-                        onChanged: (String? v) => setState(
-                            () => _departmentFilter = v ?? 'All Departments'),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildDropdown(
+                              value: _typeFilter,
+                              items: _availableTypes,
+                              onChanged: (String? v) => setState(
+                                  () => _typeFilter = v ?? 'All Types'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _buildDropdown(
+                              value: _departmentFilter,
+                              items: _availableDepartments,
+                              onChanged: (String? v) => setState(() =>
+                                  _departmentFilter = v ?? 'All Departments'),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Count + Export
-            Row(
-              children: [
-                Text(
-                  'Showing ${meetings.length} of ${_meetings.length} archived meetings',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary),
                 ),
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.download_outlined, size: 16),
-                  label: const Text('Export All'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    side: const BorderSide(color: AppColors.border),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
+                const SizedBox(height: 16),
 
-            // Table
-            Expanded(
-              child: Container(
-                decoration: AppDecorations.cardWithBorder,
-                clipBehavior: Clip.antiAlias,
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : Column(
-                        children: [
-                          // Header
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 14),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.only(
-                                topLeft: Radius.circular(12),
-                                topRight: Radius.circular(12),
-                              ),
-                            ),
-                            child: const Row(
-                              children: [
-                                Expanded(
-                                    flex: 5,
-                                    child: _HeaderCell('Meeting Title')),
-                                Expanded(
-                                    flex: 3, child: _HeaderCell('Date')),
-                                Expanded(
-                                    flex: 3, child: _HeaderCell('Type')),
-                                Expanded(
-                                    flex: 3,
-                                    child: _HeaderCell('Signatories')),
-                                Expanded(
-                                    flex: 3,
-                                    child: _HeaderCell('Archived')),
-                                Expanded(
-                                    flex: 2, child: _HeaderCell('Status')),
-                                Expanded(
-                                    flex: 2, child: _HeaderCell('Actions')),
-                              ],
-                            ),
-                          ),
-                          const Divider(height: 1, color: AppColors.border),
-                          // Rows
-                          Expanded(
-                            child: meetings.isEmpty
-                                ? Center(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.archive_outlined,
-                                            size: 48,
-                                            color: AppColors.textMuted),
-                                        const SizedBox(height: 12),
-                                        Text(
-                                          _rankedIds != null
-                                              ? 'No meetings match your search.'
-                                              : 'No archived meetings found.',
-                                          style: AppTextStyles.bodySmall,
-                                        ),
-                                      ],
+                // Count + Export
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Showing ${meetings.length} of ${_meetings.length} archived meetings',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.download_outlined, size: 16),
+                      label: const Text('Export All'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                        side: const BorderSide(color: AppColors.border),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Table (desktop) or Cards (mobile)
+                Expanded(
+                  child: Container(
+                    decoration: AppDecorations.cardWithBorder,
+                    clipBehavior: Clip.antiAlias,
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : meetings.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.archive_outlined,
+                                        size: 48,
+                                        color: AppColors.textMuted),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      _rankedIds != null
+                                          ? 'No meetings match your search.'
+                                          : 'No archived meetings found.',
+                                      style: AppTextStyles.bodySmall,
                                     ),
-                                  )
-                                : ListView.separated(
+                                  ],
+                                ),
+                              )
+                            : isMobile
+                                ? ListView.separated(
                                     itemCount: meetings.length,
-                                    separatorBuilder: (_, _) =>
+                                    separatorBuilder: (BuildContext c, int i) =>
                                         const Divider(
                                             height: 1,
                                             color: AppColors.divider),
                                     itemBuilder:
-                                        (BuildContext context, int index) {
-                                      final ArchivedMeeting m =
-                                          meetings[index];
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 20, vertical: 14),
-                                        child: Row(
-                                          children: [
-                                            // Title + department
-                                            Expanded(
-                                              flex: 5,
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment
-                                                        .start,
-                                                children: [
-                                                  Text(
-                                                    m.title,
-                                                    style: const TextStyle(
-                                                      fontSize: 13,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: AppColors
-                                                          .textPrimary,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow
-                                                        .ellipsis,
-                                                  ),
-                                                  if (m.department
-                                                      .isNotEmpty)
-                                                    Text(
-                                                      m.department,
-                                                      style:
-                                                          const TextStyle(
-                                                        fontSize: 11,
-                                                        color: AppColors
-                                                            .primaryTeal,
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                            // Date
-                                            Expanded(
-                                              flex: 3,
-                                              child: Row(
-                                                children: [
-                                                  const Icon(
-                                                      Icons
-                                                          .calendar_today_outlined,
-                                                      size: 13,
-                                                      color: AppColors
-                                                          .textMuted),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    dateFmt.format(m.date),
-                                                    style: AppTextStyles
-                                                        .bodySmall,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            // Type badge
-                                            Expanded(
-                                              flex: 3,
-                                              child: Align(
-                                                alignment:
-                                                    Alignment.centerLeft,
-                                                child:
-                                                    _TypeBadge(type: m.type),
-                                              ),
-                                            ),
-                                            // Signatories
-                                            Expanded(
-                                              flex: 3,
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    Icons
-                                                        .check_circle_outline,
-                                                    size: 14,
-                                                    color: AppColors
-                                                        .statusApproved,
-                                                  ),
-                                                  const SizedBox(width: 5),
-                                                  Text(
-                                                    '${m.signedCount} signed',
-                                                    style: AppTextStyles
-                                                        .bodySmall,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            // Archived date
-                                            Expanded(
-                                              flex: 3,
-                                              child: Text(
-                                                dateFmt
-                                                    .format(m.archivedDate),
-                                                style:
-                                                    AppTextStyles.bodySmall,
-                                              ),
-                                            ),
-                                            // Status
-                                            Expanded(
-                                              flex: 2,
-                                              child: Align(
-                                                alignment:
-                                                    Alignment.centerLeft,
-                                                child: Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 3),
-                                                  decoration: BoxDecoration(
-                                                    color: AppColors
-                                                        .statusApproved
-                                                        .withValues(
-                                                            alpha: 0.08),
-                                                    borderRadius:
-                                                        BorderRadius
-                                                            .circular(6),
-                                                  ),
-                                                  child: const Text(
-                                                    'Archived',
-                                                    style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: AppColors
-                                                          .statusApproved,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            // Actions
-                                            Expanded(
-                                              flex: 2,
-                                              child: Row(
-                                                children: [
-                                                  InkWell(
-                                                    onTap: () => context.go(
-                                                        '/graph?meeting=${m.id}'),
-                                                    borderRadius:
-                                                        BorderRadius
-                                                            .circular(4),
-                                                    child: Row(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: const [
-                                                        Icon(
-                                                          Icons
-                                                              .visibility_outlined,
-                                                          size: 14,
-                                                          color: AppColors
-                                                              .textSecondary,
-                                                        ),
-                                                        SizedBox(width: 4),
-                                                        Text(
-                                                          'View',
-                                                          style: TextStyle(
-                                                            fontSize: 12,
-                                                            color: AppColors
-                                                                .textSecondary,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 10),
-                                                  InkWell(
-                                                    onTap: () {},
-                                                    borderRadius:
-                                                        BorderRadius
-                                                            .circular(4),
-                                                    child: const Icon(
-                                                      Icons
-                                                          .download_outlined,
-                                                      size: 16,
-                                                      color: AppColors
-                                                          .textSecondary,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                        (BuildContext ctx, int index) =>
+                                            _buildMobileCard(
+                                                meetings[index], dateFmt, ctx),
+                                  )
+                                : _buildDesktopTable(meetings, dateFmt,
+                                    context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileCard(
+      ArchivedMeeting m, DateFormat dateFmt, BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      m.title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (m.department.isNotEmpty)
+                      Text(
+                        m.department,
+                        style: const TextStyle(
+                            fontSize: 11, color: AppColors.primaryTeal),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _TypeBadge(type: m.type),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(Icons.calendar_today_outlined,
+                  size: 12, color: AppColors.textMuted),
+              const SizedBox(width: 4),
+              Text(dateFmt.format(m.date), style: AppTextStyles.bodySmall),
+              const SizedBox(width: 14),
+              Icon(Icons.check_circle_outline,
+                  size: 13, color: AppColors.statusApproved),
+              const SizedBox(width: 4),
+              Text('${m.signedCount} signed', style: AppTextStyles.bodySmall),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color:
+                      AppColors.statusApproved.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Archived',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.statusApproved,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: () =>
+                    context.go('/graph?meeting=${m.id}'),
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.visibility_outlined,
+                          size: 14, color: AppColors.textSecondary),
+                      SizedBox(width: 4),
+                      Text('View',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+              ),
+              InkWell(
+                onTap: () {},
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Icon(Icons.download_outlined,
+                      size: 16, color: AppColors.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopTable(List<ArchivedMeeting> meetings,
+      DateFormat dateFmt, BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(12),
+              topRight: Radius.circular(12),
+            ),
+          ),
+          child: const Row(
+            children: [
+              Expanded(flex: 5, child: _HeaderCell('Meeting Title')),
+              Expanded(flex: 3, child: _HeaderCell('Date')),
+              Expanded(flex: 3, child: _HeaderCell('Type')),
+              Expanded(flex: 3, child: _HeaderCell('Signatories')),
+              Expanded(flex: 3, child: _HeaderCell('Archived')),
+              Expanded(flex: 2, child: _HeaderCell('Status')),
+              Expanded(flex: 2, child: _HeaderCell('Actions')),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.border),
+        Expanded(
+          child: ListView.separated(
+            itemCount: meetings.length,
+            separatorBuilder: (BuildContext c, int i) =>
+                const Divider(height: 1, color: AppColors.divider),
+            itemBuilder: (BuildContext ctx, int index) {
+              final ArchivedMeeting m = meetings[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            m.title,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (m.department.isNotEmpty)
+                            Text(m.department,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.primaryTeal)),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_today_outlined,
+                              size: 13, color: AppColors.textMuted),
+                          const SizedBox(width: 6),
+                          Text(dateFmt.format(m.date),
+                              style: AppTextStyles.bodySmall),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _TypeBadge(type: m.type)),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle_outline,
+                              size: 14,
+                              color: AppColors.statusApproved),
+                          const SizedBox(width: 5),
+                          Text('${m.signedCount} signed',
+                              style: AppTextStyles.bodySmall),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(dateFmt.format(m.archivedDate),
+                          style: AppTextStyles.bodySmall),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.statusApproved
+                                .withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'Archived',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.statusApproved,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Row(
+                        children: [
+                          InkWell(
+                            onTap: () => ctx
+                                .go('/graph?meeting=${m.id}'),
+                            borderRadius: BorderRadius.circular(4),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.visibility_outlined,
+                                    size: 14,
+                                    color: AppColors.textSecondary),
+                                SizedBox(width: 4),
+                                Text('View',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          InkWell(
+                            onTap: () {},
+                            borderRadius: BorderRadius.circular(4),
+                            child: const Icon(Icons.download_outlined,
+                                size: 16,
+                                color: AppColors.textSecondary),
                           ),
                         ],
                       ),
-              ),
-            ),
-          ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
-      ),
+      ],
     );
   }
 

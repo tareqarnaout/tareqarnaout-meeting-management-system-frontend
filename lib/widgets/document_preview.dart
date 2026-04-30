@@ -46,12 +46,106 @@ class DocumentPreview extends StatelessWidget {
   });
 
   static const Color _inkColor = Color(0xFF1B3A5C);
+  static const double _pageWidth = 520;
+  static const double _pageHeight = 735; // A4 proportions
+  static const double _pagePadding = 40;
+  static const double _contentWidth = _pageWidth - _pagePadding * 2;
+  static const double _contentHeight = _pageHeight - _pagePadding * 2;
+
+  // Approximate height consumed by fixed content on page 1 (logo, ref, greeting, body intro, decision title)
+  static const double _page1FixedHeight = 360;
+
+  // Approximate height consumed by closing/signature/footer on the last page
+  static const double _lastPageReservedHeight = 230;
+
+  static const TextStyle _decisionTextStyle = TextStyle(
+    fontSize: 11,
+    height: 1.8,
+    color: _inkColor,
+  );
+
+  /// Splits [text] into chunks that fit on each page using TextPainter measurement.
+  List<String> _paginateText(String text) {
+    if (text.isEmpty) return [''];
+
+    final List<String> pages = [];
+    String remaining = text;
+    bool isFirstPage = true;
+
+    while (remaining.isNotEmpty) {
+      double available = isFirstPage
+          ? _contentHeight - _page1FixedHeight
+          : _contentHeight - _lastPageReservedHeight;
+
+      // Guard: if the reserved blocks exceed content height, allow at least 1 line
+      if (available < 20) available = 20;
+
+      final int charsFit = _measureCharsFit(remaining, available);
+      final int cut = charsFit.clamp(1, remaining.length);
+
+      pages.add(remaining.substring(0, cut));
+      remaining = remaining.substring(cut);
+      isFirstPage = false;
+    }
+
+    return pages;
+  }
+
+  /// Returns how many characters of [text] fit within [maxHeight] using binary search.
+  int _measureCharsFit(String text, double maxHeight) {
+    final TextPainter painter = TextPainter(
+      textDirection: ui.TextDirection.rtl,
+    );
+
+    int lo = 0;
+    int hi = text.length;
+
+    while (lo < hi) {
+      final int mid = (lo + hi + 1) ~/ 2;
+      painter.text = TextSpan(text: text.substring(0, mid), style: _decisionTextStyle);
+      painter.layout(maxWidth: _contentWidth);
+      if (painter.height <= maxHeight) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+
+    return lo;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final List<String> textChunks = _paginateText(data.decisionText);
+
+    return Column(
+      children: textChunks.asMap().entries.map((MapEntry<int, String> entry) {
+        final int index = entry.key;
+        final bool isFirst = index == 0;
+        final bool isLast = index == textChunks.length - 1;
+        return _buildPage(
+          textChunk: entry.value,
+          isFirstPage: isFirst,
+          isLastPage: isLast,
+          pageNumber: index + 1,
+          totalPages: textChunks.length,
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildPage({
+    required String textChunk,
+    required bool isFirstPage,
+    required bool isLastPage,
+    required int pageNumber,
+    required int totalPages,
+  }) {
     return Container(
-      width: 520,
-      padding: const EdgeInsets.all(40),
+      width: _pageWidth,
+      height: _pageHeight,
+      margin: pageNumber > 1 ? const EdgeInsets.only(top: 24) : EdgeInsets.zero,
+      padding: const EdgeInsets.all(_pagePadding),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(4),
@@ -68,53 +162,87 @@ class DocumentPreview extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(),
-            const SizedBox(height: 16),
-            _buildRefAndDate(),
-            const SizedBox(height: 24),
-            _buildRecipients(),
-            if (data.recipients.isNotEmpty) const SizedBox(height: 16),
-            _buildGreeting(),
-            if (data.meetingTitle.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Center(
-                child: Text(
-                  data.meetingTitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: _inkColor,
+            // ── Page 1 header content ───────────────────────────────────
+            if (isFirstPage) ...[
+              _buildHeader(),
+              const SizedBox(height: 16),
+              _buildRefAndDate(),
+              const SizedBox(height: 24),
+              _buildRecipients(),
+              if (data.recipients.isNotEmpty) const SizedBox(height: 16),
+              _buildGreeting(),
+              if (data.meetingTitle.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Center(
+                  child: Text(
+                    data.meetingTitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: _inkColor,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              _buildBody(),
+              const SizedBox(height: 16),
+              _buildDecisionTitle(),
+              const SizedBox(height: 12),
+            ],
+
+            // ── Decision text chunk ─────────────────────────────────────
+            Expanded(
+              child: Text(
+                textChunk.isEmpty && showPlaceholders
+                    ? '.............................................................................................................................'
+                    : textChunk,
+                style: _decisionTextStyle.copyWith(
+                  color: textChunk.isEmpty && showPlaceholders
+                      ? AppColors.textMuted
+                      : _inkColor,
+                ),
+                textDirection: ui.TextDirection.rtl,
+                overflow: TextOverflow.clip,
+              ),
+            ),
+
+            // ── Last page closing content ───────────────────────────────
+            if (isLastPage) ...[
+              const SizedBox(height: 24),
+              _buildClosing(),
+              const SizedBox(height: 24),
+              _buildSignatureBlock(),
+              const SizedBox(height: 30),
+              if (data.copyToList.isNotEmpty) ...[
+                const Divider(color: _inkColor, thickness: 0.5),
+                const SizedBox(height: 8),
+                const Text(
+                  'نسخة إلى:',
+                  style: TextStyle(
+                      fontSize: 10, fontWeight: FontWeight.bold, color: _inkColor),
+                ),
+                const SizedBox(height: 4),
+                ...data.copyToList.map((String name) => Text(
+                      '• $name',
+                      style: const TextStyle(fontSize: 10, color: _inkColor),
+                    )),
+                const SizedBox(height: 16),
+              ],
+            ],
+
+            // ── Footer on every page ────────────────────────────────────
+            if (totalPages > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '$pageNumber / $totalPages',
                   textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 8, color: _inkColor),
+                  textDirection: ui.TextDirection.ltr,
                 ),
               ),
-            ],
-            const SizedBox(height: 12),
-            _buildBody(),
-            const SizedBox(height: 16),
-            _buildDecisionTitle(),
-            const SizedBox(height: 12),
-            _buildDecisionContent(),
-            const SizedBox(height: 24),
-            _buildClosing(),
-            const SizedBox(height: 24),
-            _buildSignatureBlock(),
-            const SizedBox(height: 30),
-            if (data.copyToList.isNotEmpty) ...[
-              const Divider(color: _inkColor, thickness: 0.5),
-              const SizedBox(height: 8),
-              const Text('نسخة إلى:',
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: _inkColor)),
-              const SizedBox(height: 4),
-              ...data.copyToList.map((String name) => Text(
-                    '• $name',
-                    style: const TextStyle(fontSize: 10, color: _inkColor),
-                  )),
-              const SizedBox(height: 16),
-            ],
             _buildFooter(),
           ],
         ),
@@ -266,23 +394,6 @@ class DocumentPreview extends StatelessWidget {
         ),
         textDirection: ui.TextDirection.rtl,
       ),
-    );
-  }
-
-  Widget _buildDecisionContent() {
-    final String text = data.decisionText;
-    final bool empty = text.isEmpty;
-
-    return Text(
-      empty && showPlaceholders
-          ? '.............................................................................................................................'
-          : text,
-      style: TextStyle(
-        fontSize: 11,
-        height: 1.8,
-        color: empty && showPlaceholders ? AppColors.textMuted : _inkColor,
-      ),
-      textDirection: ui.TextDirection.rtl,
     );
   }
 

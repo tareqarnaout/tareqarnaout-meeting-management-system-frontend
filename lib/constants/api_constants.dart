@@ -1,5 +1,6 @@
 class ApiConstants {
   static const String baseUrl = 'http://localhost:5065/api';
+  // http://localhost:5065
 }
 
 class MeetingStatus {
@@ -43,5 +44,36 @@ class UserRole {
       default:
         return 'Unknown';
     }
+  }
+}
+
+class CouncilType {
+  static const int department = 0;
+  static const int faculty = 1;
+  static const int deans = 2;
+  static const int university = 3;
+
+  static const Map<int, String> _labels = {
+    department: 'مجلس القسم',
+    faculty: 'مجلس الكلية',
+    deans: 'مجلس العمداء',
+    university: 'مجلس الجامعة',
+  };
+
+  static String label(int value) => _labels[value] ?? 'مجلس القسم';
+
+  static int valueFromLabel(String label) {
+    final MapEntry<int, String> match = _labels.entries.firstWhere(
+      (MapEntry<int, String> entry) => entry.value == label,
+      orElse: () => const MapEntry<int, String>(department, 'مجلس القسم'),
+    );
+    return match.key;
+  }
+
+  static String? fromDynamic(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return label(value);
+    if (value is String && value.trim().isNotEmpty) return value;
+    return null;
   }
 }

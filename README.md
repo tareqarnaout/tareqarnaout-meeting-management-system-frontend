@@ -14,3 +14,9 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+## Speech to Text
+
+- Uses `speech_to_text` with Arabic locale `ar` for on-device transcription.
+- Requires microphone permission; web uses the browser speech API.
+- Audio recording uses the `record` package.

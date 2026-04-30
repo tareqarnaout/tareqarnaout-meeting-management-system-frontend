@@ -3,7 +3,8 @@
     "allow": [
       "Bash(flutter analyze:*)",
       "Bash(identify /home/tareq/Documents/GP2/frontend/assets/psutLogo.png)",
-      "Bash(python3 -c \"from PIL import Image; img=Image.open\\('/home/tareq/Documents/GP2/frontend/assets/psutLogo.png'\\); print\\(img.size\\)\")"
+      "Bash(python3 -c \"from PIL import Image; img=Image.open\\('/home/tareq/Documents/GP2/frontend/assets/psutLogo.png'\\); print\\(img.size\\)\")",
+      "Bash(flutter pub *)"
     ]
   }
 }

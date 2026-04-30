@@ -37,6 +37,8 @@ class Sidebar extends StatefulWidget {
         icon: Icons.admin_panel_settings_outlined,
         route: '/users',
         adminOnly: true),
+    SidebarItem(
+        label: 'Minute Taker', icon: Icons.edit_note_outlined, route: '/minute'),
   ];
 
   @override

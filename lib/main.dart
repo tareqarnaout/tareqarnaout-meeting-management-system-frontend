@@ -6,10 +6,13 @@ import 'screens/shell_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/create_meeting_screen.dart';
 import 'screens/review_sign_screen.dart';
+import 'models/meeting.dart';
 import 'screens/meeting_sign_detail_screen.dart';
 import 'screens/decision_graph_screen.dart';
 import 'screens/archive_screen.dart';
 import 'screens/user_management_screen.dart';
+import 'screens/minute_taker_screen.dart';
+import 'services/auth_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -64,8 +67,18 @@ CustomTransitionPage<void> _fadeSlide({
   );
 }
 
+final AuthService _authService = AuthService();
+
 final GoRouter _router = GoRouter(
   initialLocation: '/login',
+  redirect: (BuildContext context, GoRouterState state) async {
+    final bool loggedIn = await _authService.isAuthenticated();
+    final bool goingToLogin = state.matchedLocation == '/login';
+
+    if (!loggedIn && !goingToLogin) return '/login';
+    if (loggedIn && goingToLogin) return '/';
+    return null;
+  },
   routes: [
     GoRoute(
       path: '/login',
@@ -100,9 +113,10 @@ final GoRouter _router = GoRouter(
           pageBuilder: (BuildContext context, GoRouterState state) {
             final int meetingId =
                 int.parse(state.pathParameters['id']!);
+            final Meeting? meeting = state.extra as Meeting?;
             return _fadeSlide(
               state: state,
-              child: MeetingSignDetailScreen(meetingId: meetingId),
+              child: MeetingSignDetailScreen(meetingId: meetingId, meeting: meeting),
             );
           },
         ),
@@ -128,6 +142,11 @@ final GoRouter _router = GoRouter(
           path: '/users',
           pageBuilder: (BuildContext context, GoRouterState state) =>
               _fadeSlide(state: state, child: const UserManagementScreen()),
+        ),
+        GoRoute(
+          path: '/minute',
+          pageBuilder: (BuildContext context, GoRouterState state) =>
+              _fadeSlide(state: state, child: const MinuteTakerScreen()),
         ),
       ],
     ),

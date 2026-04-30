@@ -41,6 +41,11 @@ class AppColors {
     Color(0xFF6BA3D6), // soft blue
     Color(0xFF9B8EC4), // muted purple
   ];
+
+  // Minute Taker accents
+  static const Color surfaceMuted = Color(0xFFF6F8FB);
+  static const Color tagBlueBg = Color(0xFFE6F3FF);
+  static const Color tagGreenBg = Color(0xFFE9F7F2);
 }
 
 class AppTextStyles {
@@ -68,9 +73,44 @@ class AppTextStyles {
     color: AppColors.textPrimary,
   );
 
+  static const TextStyle sectionTitle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textPrimary,
+  );
+
+  static const TextStyle pageTitle = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w700,
+    color: AppColors.textPrimary,
+  );
+
+  static const TextStyle bodyMedium = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textPrimary,
+  );
+
   static const TextStyle bodySmall = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w400,
+    color: AppColors.textSecondary,
+  );
+
+  static const TextStyle tag = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+  );
+
+  static const TextStyle buttonSmall = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    color: Colors.white,
+  );
+
+  static const TextStyle buttonMuted = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
     color: AppColors.textSecondary,
   );
 

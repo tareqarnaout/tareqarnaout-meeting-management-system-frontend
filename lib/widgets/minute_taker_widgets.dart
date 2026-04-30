@@ -24,9 +24,21 @@ class MinuteSectionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(title, style: AppTextStyles.sectionTitle),
-              const Spacer(),
-              if (trailing != null) trailing!,
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.sectionTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: trailing ?? const SizedBox.shrink(),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -337,14 +349,78 @@ class TranscriptEmptyState extends StatelessWidget {
   }
 }
 
+class TranscriptEntryTile extends StatelessWidget {
+  final TranscriptEntry entry;
+  final VoidCallback onTap;
+
+  const TranscriptEntryTile({
+    super.key,
+    required this.entry,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isTagged = entry.speaker.isNotEmpty;
+    final Color tagBg =
+        isTagged ? AppColors.tagBlueBg : AppColors.surfaceMuted;
+    final Color tagText =
+        isTagged ? AppColors.primaryTeal : AppColors.textSecondary;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                MinuteTag(
+                  label: isTagged ? entry.speaker : 'Unassigned',
+                  backgroundColor: tagBg,
+                  textColor: tagText,
+                ),
+                const Spacer(),
+                Text(_formatTime(entry.timestamp),
+                    style: AppTextStyles.caption),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(entry.text, style: AppTextStyles.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(DateTime timestamp) {
+    final String hh = timestamp.hour.toString().padLeft(2, '0');
+    final String mm = timestamp.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+}
+
 class TranscriptInputBar extends StatelessWidget {
   final List<String> speakers;
   final String selectedSpeaker;
+  final ValueChanged<String?> onSpeakerChanged;
+  final TextEditingController controller;
+  final VoidCallback onAdd;
 
   const TranscriptInputBar({
     super.key,
     required this.speakers,
     required this.selectedSpeaker,
+    required this.onSpeakerChanged,
+    required this.controller,
+    required this.onAdd,
   });
 
   @override
@@ -364,13 +440,14 @@ class TranscriptInputBar extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: selectedSpeaker,
+                  initialValue: selectedSpeaker,
                   items: speakers
                       .map((String speaker) => DropdownMenuItem<String>(
                             value: speaker,
                             child: Text(speaker),
                           ))
                       .toList(),
+                  onChanged: onSpeakerChanged,
                   decoration: InputDecoration(
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -394,6 +471,8 @@ class TranscriptInputBar extends StatelessWidget {
             children: [
               Expanded(
                 child: TextField(
+                  controller: controller,
+                  onSubmitted: (_) => onAdd(),
                   decoration: InputDecoration(
                     hintText: 'Type what was said...',
                     hintStyle: AppTextStyles.bodySmall,
@@ -412,7 +491,7 @@ class TranscriptInputBar extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: onAdd,
                 icon: const Icon(Icons.add, size: 16),
                 label: Text('Add', style: AppTextStyles.buttonSmall),
                 style: ElevatedButton.styleFrom(

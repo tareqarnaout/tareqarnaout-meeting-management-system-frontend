@@ -1,3 +1,5 @@
+import '../constants/api_constants.dart';
+
 class Meeting {
   final int? id;
   final String title;
@@ -69,9 +71,9 @@ class Meeting {
               ?.map((dynamic e) => e as int)
               .toList() ??
           [],
-      sessionNumber: json['sessionNumber'] as String?,
-      decisionNumber: json['decisionNumber'] as String?,
-      councilType: json['councilType'] as String?,
+      sessionNumber: json['sessionNumber']?.toString(),
+      decisionNumber: json['decisionNumber']?.toString(),
+      councilType: CouncilType.fromDynamic(json['councilType']),
     );
   }
 
@@ -88,7 +90,8 @@ class Meeting {
         'sessionNumber': int.tryParse(sessionNumber!) ?? 0,
       if (decisionNumber != null)
         'decisionNumber': int.tryParse(decisionNumber!) ?? 0,
-      if (councilType != null) 'councilType': councilType,
+      if (councilType != null)
+        'councilType': CouncilType.valueFromLabel(councilType!),
       if (relationships.isNotEmpty) 'relationships': relationships,
     };
   }
@@ -144,7 +147,7 @@ class ArchivedMeeting {
       id: json['id'] as int,
       title: json['title'] as String? ?? '',
       date: DateTime.parse(json['meetingDate'] as String),
-      type: json['councilType'] as String? ?? '',
+      type: CouncilType.fromDynamic(json['councilType']) ?? '',
       signatureNeededCount: json['signatureNeededCount'] as int? ?? 0,
       status: json['status'] as int? ?? 0,
     );

@@ -98,10 +98,9 @@ class AppHeader extends StatelessWidget {
             ],
             onSelected: (String value) async {
               if (value == 'logout') {
+                final GoRouter router = GoRouter.of(context);
                 await AuthService().logout();
-                if (context.mounted) {
-                  context.go('/login');
-                }
+                router.go('/login');
               }
             },
             child: Row(

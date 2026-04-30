@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../constants/app_theme.dart';
+import '../constants/api_constants.dart';
 import '../models/meeting.dart';
 import '../services/meeting_service.dart';
 
@@ -104,7 +105,7 @@ class _ReviewSignScreenState extends State<ReviewSignScreen> {
             _MeetingPendingCard(
           meeting: _meetings[index],
           onTap: () =>
-              context.go('/review/${_meetings[index].id}'),
+              context.go('/review/${_meetings[index].id}', extra: _meetings[index]),
         ),
       ),
     );
@@ -120,10 +121,29 @@ class _MeetingPendingCard extends StatelessWidget {
     required this.onTap,
   });
 
+  Widget _buildTag(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final String formattedDate =
         DateFormat('MMM dd, yyyy').format(meeting.meetingDate);
+    final bool isDraft = meeting.status == MeetingStatus.draft;
 
     return InkWell(
       onTap: onTap,
@@ -180,21 +200,15 @@ class _MeetingPendingCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.statusPending.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Sign',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.statusPending,
-                ),
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildTag('Sign', AppColors.statusPending),
+                if (isDraft) ...[
+                  const SizedBox(width: 8),
+                  _buildTag('Approve', AppColors.statusApproved),
+                ],
+              ],
             ),
           ],
         ),

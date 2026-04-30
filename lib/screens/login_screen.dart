@@ -166,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: AppDecorations.inputDecoration(
                             '',
                             hint: 'dr.qusef@university.edu',
-                            prefixIcon: Icon(
+                            prefixIcon: const Icon(
                               Icons.email_outlined,
                               size: 20,
                               color: AppColors.textMuted,
@@ -207,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: AppDecorations.inputDecoration(
                             '',
                             hint: 'Enter your password',
-                            prefixIcon: Icon(
+                            prefixIcon: const Icon(
                               Icons.lock_outline,
                               size: 20,
                               color: AppColors.textMuted,
@@ -233,8 +233,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 16),
                         // Footer link
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 4,
+                          runSpacing: 4,
                           children: [
                             Text(
                               "Don't have an account? ",

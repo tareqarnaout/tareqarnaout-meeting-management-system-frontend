@@ -36,3 +36,35 @@ class HandoffStat {
   });
 }
 
+enum RecordingState {
+  idle,
+  recording,
+  paused,
+}
+
+class TranscriptEntry {
+  final String id;
+  final String text;
+  final String speaker;
+  final DateTime timestamp;
+
+  const TranscriptEntry({
+    required this.id,
+    required this.text,
+    required this.speaker,
+    required this.timestamp,
+  });
+
+  TranscriptEntry copyWith({
+    String? text,
+    String? speaker,
+    DateTime? timestamp,
+  }) {
+    return TranscriptEntry(
+      id: id,
+      text: text ?? this.text,
+      speaker: speaker ?? this.speaker,
+      timestamp: timestamp ?? this.timestamp,
+    );
+  }
+}

@@ -7,7 +7,9 @@ void main() {
       (WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: MinuteTakerScreen(),
+        home: Scaffold(
+          body: MinuteTakerScreen(),
+        ),
       ),
     );
 
@@ -18,4 +20,3 @@ void main() {
     expect(find.text('Handoff to Secretary'), findsOneWidget);
   });
 }
-

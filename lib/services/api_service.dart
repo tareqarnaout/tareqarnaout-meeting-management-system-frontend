@@ -22,8 +22,27 @@ class ApiService {
     };
   }
 
+  String _normalizeBaseUrl(String baseUrl) {
+    final String trimmed = baseUrl.trim();
+    final Uri uri = Uri.parse(trimmed);
+    if (uri.path.isEmpty && trimmed.endsWith('api')) {
+      final int index = trimmed.lastIndexOf('api');
+      return '${trimmed.substring(0, index)}/api';
+    }
+    return trimmed;
+  }
+
+  String _buildUrl(String endpoint) {
+    final String normalizedBase = _normalizeBaseUrl(ApiConstants.baseUrl);
+    final String base = normalizedBase.endsWith('/')
+        ? normalizedBase.substring(0, normalizedBase.length - 1)
+        : normalizedBase;
+    final String path = endpoint.startsWith('/') ? endpoint : '/$endpoint';
+    return '$base$path';
+  }
+
   Future<http.Response> get(String endpoint) async {
-    final String url = '${ApiConstants.baseUrl}$endpoint';
+    final String url = _buildUrl(endpoint);
     debugPrint('[API] GET $url');
     try {
       final Map<String, String> headers = await getHeaders();
@@ -39,7 +58,7 @@ class ApiService {
 
   Future<http.Response> post(
       String endpoint, Map<String, dynamic> body) async {
-    final String url = '${ApiConstants.baseUrl}$endpoint';
+    final String url = _buildUrl(endpoint);
     debugPrint('[API] POST $url');
     try {
       final Map<String, String> headers = await getHeaders();
@@ -54,7 +73,7 @@ class ApiService {
   }
 
   Future<http.Response> put(String endpoint, Map<String, dynamic> body) async {
-    final String url = '${ApiConstants.baseUrl}$endpoint';
+    final String url = _buildUrl(endpoint);
     debugPrint('[API] PUT $url');
     try {
       final Map<String, String> headers = await getHeaders();
@@ -69,7 +88,7 @@ class ApiService {
   }
 
   Future<http.Response> delete(String endpoint) async {
-    final String url = '${ApiConstants.baseUrl}$endpoint';
+    final String url = _buildUrl(endpoint);
     debugPrint('[API] DELETE $url');
     try {
       final Map<String, String> headers = await getHeaders();

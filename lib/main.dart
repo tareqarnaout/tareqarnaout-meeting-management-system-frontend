@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'constants/app_theme.dart';
+import 'constants/api_constants.dart';
 import 'screens/login_screen.dart';
 import 'screens/shell_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -77,6 +78,21 @@ final GoRouter _router = GoRouter(
 
     if (!loggedIn && !goingToLogin) return '/login';
     if (loggedIn && goingToLogin) return '/';
+
+    if (loggedIn) {
+      final int? roleId = await _authService.getRoleId();
+      final String location = state.matchedLocation;
+      final bool isAdminRoute = location == '/users';
+      final bool isMinuteRoute = location == '/minute';
+
+      if (isAdminRoute && roleId != UserRole.admin) return '/';
+      if (isMinuteRoute &&
+          roleId != UserRole.minuteTaker &&
+          roleId != UserRole.admin) {
+        return '/';
+      }
+    }
+
     return null;
   },
   routes: [

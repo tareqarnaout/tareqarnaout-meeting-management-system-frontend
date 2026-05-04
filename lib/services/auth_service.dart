@@ -9,6 +9,7 @@ class AuthService {
 
   // Cached so the GoRouter redirect doesn't hit storage on every navigation.
   static bool? _authStateCache;
+  static int? _roleIdCache;
 
   Future<bool> login(String email, String password) async {
     try {
@@ -21,13 +22,17 @@ class AuthService {
         final Map<String, dynamic> data =
             jsonDecode(response.body) as Map<String, dynamic>;
         final String token = data['token'] as String;
+        final dynamic roleIdValue = data['roleId'] ?? data['roleID'];
+        final int roleId = roleIdValue is int
+            ? roleIdValue
+            : int.parse(roleIdValue.toString());
 
         await _storage.write(key: 'auth_token', value: token);
-        await _storage.write(
-            key: 'role_id', value: (data['roleID'] as int).toString());
+        await _storage.write(key: 'role_id', value: roleId.toString());
 
         ApiService.setTokenCache(token);
         _authStateCache = true;
+        _roleIdCache = roleId;
         return true;
       }
       return false;
@@ -38,6 +43,7 @@ class AuthService {
 
   Future<void> logout() async {
     _authStateCache = false;
+    _roleIdCache = null;
     ApiService.clearTokenCache();
     try {
       await _api.post('/auth/logout', {});
@@ -53,8 +59,10 @@ class AuthService {
   }
 
   Future<int?> getRoleId() async {
+    if (_roleIdCache != null) return _roleIdCache;
     final String? roleStr = await _storage.read(key: 'role_id');
-    return roleStr != null ? int.tryParse(roleStr) : null;
+    _roleIdCache = roleStr != null ? int.tryParse(roleStr) : null;
+    return _roleIdCache;
   }
 
   Future<bool> isAuthenticated() async {
@@ -64,6 +72,7 @@ class AuthService {
     final String? token = await getToken();
     if (token == null || token.isEmpty) {
       _authStateCache = false;
+      _roleIdCache = null;
       return false;
     }
 
@@ -71,6 +80,7 @@ class AuthService {
       await _storage.delete(key: 'auth_token');
       await _storage.delete(key: 'role_id');
       _authStateCache = false;
+      _roleIdCache = null;
       return false;
     }
 

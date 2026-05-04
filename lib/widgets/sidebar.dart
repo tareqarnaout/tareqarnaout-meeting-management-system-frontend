@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../constants/app_theme.dart';
+import '../constants/api_constants.dart';
 import '../services/auth_service.dart';
 
 class SidebarItem {
   final String label;
   final IconData icon;
   final String route;
-  final bool adminOnly;
+  final List<int>? allowedRoles;
 
   const SidebarItem({
     required this.label,
     required this.icon,
     required this.route,
-    this.adminOnly = false,
+    this.allowedRoles,
   });
 }
 
@@ -36,9 +37,12 @@ class Sidebar extends StatefulWidget {
         label: 'User Management',
         icon: Icons.admin_panel_settings_outlined,
         route: '/users',
-        adminOnly: true),
+        allowedRoles: [UserRole.admin]),
     SidebarItem(
-        label: 'Minute Taker', icon: Icons.edit_note_outlined, route: '/minute'),
+        label: 'Minute Taker',
+        icon: Icons.edit_note_outlined,
+        route: '/minute',
+        allowedRoles: [UserRole.minuteTaker]),
   ];
 
   @override
@@ -62,7 +66,11 @@ class _SidebarState extends State<Sidebar> {
   @override
   Widget build(BuildContext context) {
     final List<SidebarItem> visibleItems = Sidebar.items
-        .where((SidebarItem item) => !item.adminOnly || _roleId == 1)
+        .where((SidebarItem item) {
+          if (_roleId == UserRole.admin) return true;
+          return item.allowedRoles == null ||
+              (_roleId != null && item.allowedRoles!.contains(_roleId));
+        })
         .toList();
 
     return Container(

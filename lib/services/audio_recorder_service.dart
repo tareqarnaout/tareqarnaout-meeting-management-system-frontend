@@ -4,6 +4,7 @@ import 'package:record/record.dart';
 enum AudioRecorderStartStatus {
   started,
   permissionDenied,
+  unsupported,
   failed,
 }
 
@@ -11,6 +12,10 @@ class AudioRecorderService {
   final AudioRecorder _recorder = AudioRecorder();
 
   Future<AudioRecorderStartStatus> start() async {
+    if (kIsWeb && !_isSecureContext()) {
+      // Web recording requires a secure context (HTTPS or localhost).
+      return AudioRecorderStartStatus.unsupported;
+    }
     final bool hasPermission = await _recorder.hasPermission();
     if (!hasPermission) {
       return AudioRecorderStartStatus.permissionDenied;
@@ -50,5 +55,12 @@ class AudioRecorderService {
 
   Future<void> dispose() async {
     await _recorder.dispose();
+  }
+
+  bool _isSecureContext() {
+    final Uri base = Uri.base;
+    if (base.scheme == 'https') return true;
+    final String host = base.host;
+    return host == 'localhost' || host == '127.0.0.1';
   }
 }

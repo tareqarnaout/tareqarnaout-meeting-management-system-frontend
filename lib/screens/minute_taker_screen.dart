@@ -87,6 +87,12 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
         _showError('Microphone permission is required to record audio.');
         return;
       }
+      if (status == AudioRecorderStartStatus.unsupported) {
+        _showError(
+          'Recording on the web requires HTTPS or localhost in a supported browser.',
+        );
+        return;
+      }
       if (status == AudioRecorderStartStatus.failed) {
         _showError('Unable to start recording.');
         return;

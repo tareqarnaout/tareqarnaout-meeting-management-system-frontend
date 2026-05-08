@@ -65,6 +65,42 @@ class AuthService {
     return _roleIdCache;
   }
 
+  Future<int?> getUserId() async {
+    final String? token = await getToken();
+    if (token == null) return null;
+    try {
+      final Map<String, dynamic> decoded = JwtDecoder.decode(token);
+      final dynamic userId = decoded['nameid'] ??
+          decoded['sub'] ??
+          decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ??
+          decoded['UserId'] ??
+          decoded['userId'];
+      if (userId != null) {
+        return int.tryParse(userId.toString());
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> getUserName() async {
+    final String? token = await getToken();
+    if (token == null) return null;
+    try {
+      final Map<String, dynamic> decoded = JwtDecoder.decode(token);
+      final dynamic name = decoded['unique_name'] ??
+          decoded['name'] ??
+          decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ??
+          decoded['UserName'] ??
+          decoded['userName'] ??
+          decoded['email'];
+      return name?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<bool> isAuthenticated() async {
     // Return cached result to avoid storage reads on every route change.
     if (_authStateCache != null) return _authStateCache!;

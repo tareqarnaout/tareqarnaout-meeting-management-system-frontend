@@ -1,11 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import '../constants/api_constants.dart';
 import '../constants/app_theme.dart';
 import '../models/minute_taker_models.dart';
+import '../models/meeting_note.dart';
 import '../services/audio_recorder_service.dart';
-import '../services/speech_to_text_service.dart';
+import '../services/arabic_speech_service.dart';
+import '../services/auth_service.dart';
+import '../services/meeting_notes_service.dart';
 import '../widgets/minute_taker_widgets.dart';
 
 class MinuteTakerScreen extends StatefulWidget {
@@ -19,30 +24,62 @@ class MinuteTakerScreen extends StatefulWidget {
 }
 
 class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
-  static const List<String> _speakers = <String>[
-    'Dr. Abdulla Qusef',
-    'Dr. Mohammad Ali',
-    'Dr. Fatima Hasan',
-  ];
-
+  // ── Services ──────────────────────────────────────────────────────────────
   final AudioRecorderService _recorder = AudioRecorderService();
-  final SpeechToTextService _speechToTextService = SpeechToTextService();
+  final ArabicSpeechService _speechService = ArabicSpeechService();
+  final MeetingNotesService _notesService = MeetingNotesService();
+  final AuthService _authService = AuthService();
   final TextEditingController _statementController = TextEditingController();
+
+  // ── Meeting state ─────────────────────────────────────────────────────────
+  final List<Attendee> _attendees = <Attendee>[];
+
+  final List<AgendaItem> _agenda = <AgendaItem>[];
+
   final List<TranscriptEntry> _entries = <TranscriptEntry>[];
   final Stopwatch _stopwatch = Stopwatch();
   Timer? _timer;
+
+  // ── Recording & STT state ─────────────────────────────────────────────────
   RecordingState _recordingState = RecordingState.idle;
-  String _selectedSpeaker = _speakers.first;
   String _liveTranscript = '';
   bool _sttAvailable = false;
   bool _sttListening = false;
   bool _sttInitializing = false;
-  final String _localeId = 'ar';
+  bool _isSending = false;
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+  /// All attendee names, used as the speaker dropdown options.
+  List<String> get _speakers => _attendees.map((Attendee a) => a.name).toList();
+
+  String _selectedSpeaker = '';
+  String _selectedDepartment = 'هندسة البرمجيات';
+  String _selectedMeetingType = 'مجلس القسم';
+
+  static const List<String> _departments = <String>[
+    'هندسة البرمجيات',
+    'علوم الحاسوب',
+    'هندسة الحاسوب',
+    'علم البيانات والذكاء الاصطناعي',
+    'الأمن السيبراني',
+    'الرسوم الحاسوبية والرسوم المتحركة',
+    'تكنولوجيا معلومات الأعمال',
+    'هندسة الشبكات',
+    'هندسة إنترنت الأشياء',
+  ];
+
+  static const List<String> _meetingTypes = <String>[
+    'مجلس القسم',
+    'مجلس الكلية',
+    'مجلس العمداء',
+    'مجلس الجامعة',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _initializeSpeechToText();
+    _selectedSpeaker = _attendees.isNotEmpty ? _attendees.first.name : '';
+    _initializeSpeech();
   }
 
   @override
@@ -50,15 +87,16 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
     _timer?.cancel();
     _statementController.dispose();
     _recorder.dispose();
-    _speechToTextService.dispose();
+    _speechService.dispose();
     super.dispose();
   }
 
-  Future<void> _initializeSpeechToText() async {
+  // ── STT ───────────────────────────────────────────────────────────────────
+
+  Future<void> _initializeSpeech() async {
     setState(() => _sttInitializing = true);
     try {
-      final bool available =
-          await _speechToTextService.initialize(localeId: _localeId);
+      final bool available = await _speechService.initialize();
       if (!mounted) return;
       setState(() {
         _sttAvailable = available;
@@ -73,6 +111,36 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
     }
   }
 
+  Future<void> _startTranscription() async {
+    if (_sttInitializing || !_sttAvailable || _sttListening) return;
+    await _speechService.startListening(
+      onResult: (String text, bool isFinal) {
+        if (!mounted) return;
+        setState(() => _liveTranscript = text);
+        if (isFinal) _addTranscriptFromSpeech(text);
+      },
+      onStatus: (bool listening) {
+        if (!mounted) return;
+        setState(() => _sttListening = listening);
+      },
+      onError: (String error) {
+        if (!mounted) return;
+        _showError(error);
+      },
+    );
+  }
+
+  Future<void> _stopTranscription() async {
+    await _speechService.stopListening();
+    if (!mounted) return;
+    setState(() {
+      _sttListening = false;
+      _liveTranscript = '';
+    });
+  }
+
+  // ── Recording ─────────────────────────────────────────────────────────────
+
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -84,25 +152,31 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
     try {
       final AudioRecorderStartStatus status = await _recorder.start();
       if (status == AudioRecorderStartStatus.permissionDenied) {
-        _showError('Microphone permission is required to record audio.');
+        final String d = _recorder.lastErrorMessage ?? '';
+        _showError(d.isEmpty
+            ? 'Microphone permission is required to record audio.'
+            : 'Microphone permission is required. ($d)');
         return;
       }
       if (status == AudioRecorderStartStatus.unsupported) {
-        _showError(
-          'Recording on the web requires HTTPS or localhost in a supported browser.',
-        );
+        final String d = _recorder.lastErrorMessage ?? '';
+        _showError(d.isEmpty
+            ? 'Recording on the web requires HTTPS or localhost in a supported browser.'
+            : 'Recording on the web requires HTTPS or localhost. ($d)');
         return;
       }
       if (status == AudioRecorderStartStatus.failed) {
-        _showError('Unable to start recording.');
+        final String d = _recorder.lastErrorMessage ?? '';
+        _showError(
+            d.isEmpty ? 'Unable to start recording.' : 'Unable to start recording. ($d)');
         return;
       }
       _stopwatch.start();
       _startTimer();
       setState(() => _recordingState = RecordingState.recording);
       await _startTranscription();
-    } catch (_) {
-      _showError('Unable to start recording.');
+    } catch (error) {
+      _showError('Unable to start recording. (${error.toString()})');
     }
   }
 
@@ -133,52 +207,14 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
   Future<void> _stopRecording() async {
     if (_recordingState == RecordingState.idle) return;
     try {
-      final String? path = await _recorder.stop();
+      await _recorder.stop();
       _stopwatch.reset();
       _timer?.cancel();
       setState(() => _recordingState = RecordingState.idle);
       await _stopTranscription();
-      if (path == null) return;
-      _showInfo('Recording saved.');
     } catch (_) {
       _showError('Unable to stop recording.');
     }
-  }
-
-  Future<void> _startTranscription() async {
-    if (_sttInitializing || !_sttAvailable || _sttListening) {
-      return;
-    }
-    final bool started = await _speechToTextService.startListening(
-      localeId: _localeId,
-      onResult: (String text, bool isFinal) {
-        if (!mounted) return;
-        if (text.isEmpty) return;
-        setState(() {
-          _liveTranscript = text;
-        });
-        if (isFinal) {
-          _addTranscriptFromSpeech(text);
-        }
-      },
-    );
-    if (!started && mounted) {
-      _showError('Arabic transcription is unavailable on this device.');
-      return;
-    }
-    if (mounted) {
-      setState(() => _sttListening = true);
-    }
-  }
-
-  Future<void> _stopTranscription() async {
-    if (!_sttListening) return;
-    await _speechToTextService.stop();
-    if (!mounted) return;
-    setState(() {
-      _sttListening = false;
-      _liveTranscript = '';
-    });
   }
 
   void _handleRecordToggle() {
@@ -191,17 +227,21 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
     }
   }
 
+  // ── Transcript entries ────────────────────────────────────────────────────
+
   void _addStatement() {
     final String text = _statementController.text.trim();
     if (text.isEmpty) return;
-    final TranscriptEntry entry = TranscriptEntry(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      text: text,
-      speaker: _selectedSpeaker,
-      timestamp: DateTime.now(),
-    );
     setState(() {
-      _entries.insert(0, entry);
+      _entries.insert(
+        0,
+        TranscriptEntry(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          text: text,
+          speaker: _selectedSpeaker,
+          timestamp: DateTime.now(),
+        ),
+      );
     });
     _statementController.clear();
   }
@@ -209,69 +249,397 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
   void _addTranscriptFromSpeech(String text) {
     final String trimmed = text.trim();
     if (trimmed.isEmpty) return;
-    final TranscriptEntry entry = TranscriptEntry(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      text: trimmed,
-      speaker: _selectedSpeaker,
-      timestamp: DateTime.now(),
-    );
     setState(() {
-      _entries.insert(0, entry);
+      _entries.insert(
+        0,
+        TranscriptEntry(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          text: trimmed,
+          speaker: _selectedSpeaker,
+          timestamp: DateTime.now(),
+        ),
+      );
       _liveTranscript = '';
     });
   }
 
-  void _showSpeakerPicker(TranscriptEntry entry) {
+  void _showEntryEditor(TranscriptEntry entry) {
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (BuildContext context) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Tag speaker', style: AppTextStyles.heading3),
-              const SizedBox(height: 12),
-              ..._speakers.map((String speaker) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(speaker, style: AppTextStyles.body),
-                  trailing: entry.speaker == speaker
-                      ? const Icon(Icons.check, color: AppColors.primaryTeal)
-                      : null,
-                  onTap: () {
-                    Navigator.pop(context);
-                    _updateEntrySpeaker(entry, speaker);
-                  },
-                );
-              }),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text('Unassigned', style: AppTextStyles.bodySmall),
-                onTap: () {
-                  Navigator.pop(context);
-                  _updateEntrySpeaker(entry, '');
-                },
+      builder: (_) => EntryEditorSheet(
+        entry: entry,
+        speakers: _speakers,
+        onSave: (String speaker, String take) {
+          final int index = _entries.indexWhere((TranscriptEntry e) => e.id == entry.id);
+          if (index == -1) return;
+          setState(() {
+            _entries[index] = _entries[index].copyWith(speaker: speaker, take: take);
+          });
+        },
+      ),
+    );
+  }
+
+  // ── Attendees ─────────────────────────────────────────────────────────────
+
+  void _toggleAttendeePresence(Attendee attendee) {
+    final int idx = _attendees.indexWhere((Attendee a) => a.name == attendee.name);
+    if (idx == -1) return;
+    setState(() {
+      _attendees[idx] = _attendees[idx].copyWith(isPresent: !_attendees[idx].isPresent);
+    });
+  }
+
+  void _addAttendee(Attendee attendee) {
+    final int existing = _attendees.indexWhere((Attendee a) => a.name == attendee.name);
+    if (existing != -1) {
+      setState(() {
+        _attendees[existing] = _attendees[existing].copyWith(isPresent: true);
+      });
+      return;
+    }
+    setState(() {
+      _attendees.add(attendee.copyWith(isPresent: true));
+      if (_speakers.isNotEmpty) _selectedSpeaker = _attendees.last.name;
+    });
+  }
+
+  void _showAttendeeSearch() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => AttendeeSearchSheet(
+        existingNames: _attendees.map((Attendee a) => a.name).toSet(),
+        onAdd: _addAttendee,
+      ),
+    );
+  }
+
+  // ── Agenda ────────────────────────────────────────────────────────────────
+
+  void _addAgendaItem(String title) {
+    final String trimmed = title.trim();
+    if (trimmed.isEmpty) return;
+    setState(() {
+      final int nextIndex = _agenda.isEmpty ? 1 : _agenda.last.index + 1;
+      _agenda.add(AgendaItem(index: nextIndex, title: trimmed, isActive: _agenda.isEmpty));
+    });
+  }
+
+  void _removeAgendaItem(int index) {
+    setState(() {
+      _agenda.removeAt(index);
+      for (int i = 0; i < _agenda.length; i++) {
+        _agenda[i] = AgendaItem(index: i + 1, title: _agenda[i].title, isActive: _agenda[i].isActive);
+      }
+    });
+  }
+
+  // ── Handoff preview ───────────────────────────────────────────────────────
+
+  void _showHandoffPreview() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => HandoffPreviewDialog(
+        meetingTitle: 'Faculty Council Meeting - Term 2',
+        meetingDate: '2026-04-30',
+        attendees: _attendees,
+        agenda: _agenda,
+        entries: _entries,
+      ),
+    );
+  }
+
+  // ── Send notes to secretary ────────────────────────────────────────────
+
+  Future<void> _sendNotes() async {
+    if (_isSending) return;
+    if (_entries.isEmpty) {
+      _showError('No statements captured yet.');
+      return;
+    }
+
+    setState(() => _isSending = true);
+
+    try {
+      final int? userId = await _authService.getUserId();
+      final String? userName = await _authService.getUserName();
+      final int? roleId = await _authService.getRoleId();
+      if (userId == null) {
+        _showError('Unable to identify user. Please log in again.');
+        setState(() => _isSending = false);
+        return;
+      }
+
+      final String roleName = roleId != null
+          ? UserRole.label(roleId)
+          : 'Minute Taker';
+      final String recorderDisplay = userName != null
+          ? '$userName — $roleName'
+          : 'User #$userId — $roleName';
+
+      final List<NoteAttendee> noteAttendees = _attendees
+          .map((Attendee a) => NoteAttendee(
+                initials: a.initials,
+                name: a.name,
+                role: a.role,
+                isPresent: a.isPresent,
+              ))
+          .toList();
+
+      final List<NoteAgendaItem> noteAgenda = _agenda
+          .map((AgendaItem a) =>
+              NoteAgendaItem(index: a.index, title: a.title))
+          .toList();
+
+      final List<NoteTranscriptEntry> noteTranscript = _entries
+          .map((TranscriptEntry e) => NoteTranscriptEntry(
+                speaker: e.speaker,
+                text: e.text,
+                timestamp: e.timestamp.toIso8601String(),
+                take: e.take.isNotEmpty ? e.take : null,
+              ))
+          .toList();
+
+      final NoteContent content = NoteContent(
+        title: 'Faculty Council Meeting - Term 2',
+        titleAr: 'اجتماع هيئة التدريس',
+        recorderName: recorderDisplay,
+        department: _selectedDepartment,
+        meetingType: _selectedMeetingType,
+        attendees: noteAttendees,
+        agenda: noteAgenda,
+        transcript: noteTranscript,
+        durationMinutes: _stopwatch.elapsed.inMinutes,
+      );
+
+      final String notesJson = jsonEncode(content.toJson());
+
+      final bool success = await _notesService.createNote(
+        notes: notesJson,
+        attendeeIds: <int>[],
+        recorderId: userId,
+        date: DateTime.now(),
+      );
+
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Notes sent to secretary successfully.'),
+            backgroundColor: AppColors.statusApproved,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        _showError('Failed to send notes. Please try again.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Network error. Please check your connection.');
+    }
+
+    if (mounted) setState(() => _isSending = false);
+  }
+
+  // ── Save to archive ────────────────────────────────────────────────────
+
+  Future<void> _saveToArchive() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Save to Archive'),
+        content: const Text(
+          'Are you sure you want to save these meeting minutes to the archive? This action cannot be undone.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryTeal,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Meeting minutes saved to archive successfully.'),
+        backgroundColor: AppColors.statusApproved,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  String _formatDuration(Duration duration) {
+    final int minutes = duration.inMinutes;
+    final int seconds = duration.inSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.statusDraft,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final TextScaler textScaler = MediaQuery.textScalerOf(context);
+    final double textScale = textScaler.scale(1.0);
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool isDesktop =
+            constraints.maxWidth >= MinuteTakerScreen._desktopBreakpoint;
+        final EdgeInsets pagePadding = EdgeInsets.all(isDesktop ? 24 : 16);
+        final double sectionGap = textScale > 1.1 ? 18 : 22;
+
+        final int presentCount = _attendees.where((Attendee a) => a.isPresent).length;
+        final List<HandoffStat> stats = <HandoffStat>[
+          HandoffStat(label: 'Statements', value: _entries.length.toString()),
+          HandoffStat(label: 'Attendees', value: '$presentCount/${_attendees.length}'),
+          HandoffStat(label: 'Duration', value: _formatDuration(_stopwatch.elapsed)),
+        ];
+
+        final _LeftColumn leftCol = _LeftColumn(
+          sectionGap: sectionGap,
+          attendees: _attendees,
+          agenda: _agenda,
+          onAttendeeToggle: _toggleAttendeePresence,
+          onAddAttendee: _showAttendeeSearch,
+          onAddAgenda: _addAgendaItem,
+          onRemoveAgenda: _removeAgendaItem,
+        );
+
+        final _CenterColumn centerCol = _CenterColumn(
+          sectionGap: sectionGap,
+          entries: _entries,
+          speakers: _speakers,
+          selectedSpeaker: _selectedSpeaker,
+          onSpeakerChanged: (String? value) {
+            if (value == null) return;
+            setState(() => _selectedSpeaker = value);
+          },
+          sttAvailable: _sttAvailable,
+          sttListening: _sttListening,
+          liveTranscript: _liveTranscript,
+          controller: _statementController,
+          onAdd: _addStatement,
+          onEntryTap: _showEntryEditor,
+        );
+
+        final _RightColumn rightCol = _RightColumn(
+          sectionGap: sectionGap,
+          stats: stats,
+          onPreview: _showHandoffPreview,
+          onSendNotes: _sendNotes,
+          isSending: _isSending,
+          departments: _departments,
+          selectedDepartment: _selectedDepartment,
+          onDepartmentChanged: (String? value) {
+            if (value != null) setState(() => _selectedDepartment = value);
+          },
+          meetingTypes: _meetingTypes,
+          selectedMeetingType: _selectedMeetingType,
+          onMeetingTypeChanged: (String? value) {
+            if (value != null) setState(() => _selectedMeetingType = value);
+          },
+        );
+
+        Widget content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _MinuteHeader(
+              textScale: textScale,
+              recordingLabel: _recordingLabel(),
+              recordingIcon: _recordingIcon(),
+              recordLabel: _recordButtonLabel(),
+              recordIcon: _recordButtonIcon(),
+              recordingState: _recordingState,
+              onRecordToggle: _handleRecordToggle,
+              onStop: _stopRecording,
+              onSendToSecretary: _isSending ? null : _sendNotes,
+              onSaveToArchive: _saveToArchive,
+            ),
+            SizedBox(height: sectionGap),
+            if (isDesktop)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: leftCol),
+                  const SizedBox(width: 18),
+                  Expanded(flex: 2, child: centerCol),
+                  const SizedBox(width: 18),
+                  Expanded(child: rightCol),
+                ],
+              )
+            else
+              Column(
+                children: [
+                  leftCol,
+                  SizedBox(height: sectionGap),
+                  centerCol,
+                  SizedBox(height: sectionGap),
+                  rightCol,
+                ],
               ),
-              const SizedBox(height: 8),
-            ],
+          ],
+        );
+
+        if (kIsWeb) {
+          content = Center(
+            child: ConstrainedBox(
+              constraints:
+                  const BoxConstraints(maxWidth: MinuteTakerScreen._webMaxWidth),
+              child: content,
+            ),
+          );
+        }
+
+        return Container(
+          color: AppColors.pageBg,
+          child: ScrollConfiguration(
+            behavior: const _MinuteScrollBehavior(),
+            child: SingleChildScrollView(
+              padding: pagePadding,
+              child: content,
+            ),
           ),
         );
       },
     );
-  }
-
-  void _updateEntrySpeaker(TranscriptEntry entry, String speaker) {
-    final int index = _entries.indexWhere((TranscriptEntry e) => e.id == entry.id);
-    if (index == -1) return;
-    setState(() {
-      _entries[index] = _entries[index].copyWith(speaker: speaker);
-    });
   }
 
   String _recordingLabel() {
@@ -318,149 +686,9 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
         return Icons.mic_none;
     }
   }
-
-  String _formatDuration(Duration duration) {
-    final int minutes = duration.inMinutes;
-    final int seconds = duration.inSeconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.statusDraft,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showInfo(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.primaryTeal,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final TextScaler textScaler = MediaQuery.textScalerOf(context);
-    final double textScale = textScaler.scale(1.0);
-
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool isDesktop =
-            constraints.maxWidth >= MinuteTakerScreen._desktopBreakpoint;
-        final EdgeInsets pagePadding = EdgeInsets.all(isDesktop ? 24 : 16);
-        final double sectionGap = textScale > 1.1 ? 18 : 22;
-
-        final List<HandoffStat> stats = <HandoffStat>[
-          HandoffStat(label: 'Statements', value: _entries.length.toString()),
-          const HandoffStat(label: 'Action items', value: '0', highlight: true),
-          const HandoffStat(label: 'Attendees', value: '5'),
-          HandoffStat(label: 'Duration', value: _formatDuration(_stopwatch.elapsed)),
-        ];
-
-        Widget content = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _MinuteHeader(
-              textScale: textScale,
-              recordingLabel: _recordingLabel(),
-              recordingIcon: _recordingIcon(),
-              recordLabel: _recordButtonLabel(),
-              recordIcon: _recordButtonIcon(),
-              recordingState: _recordingState,
-              onRecordToggle: _handleRecordToggle,
-              onStop: _stopRecording,
-            ),
-            SizedBox(height: sectionGap),
-            if (isDesktop)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _LeftColumn(sectionGap: sectionGap)),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    flex: 2,
-                    child: _CenterColumn(
-                      sectionGap: sectionGap,
-                      entries: _entries,
-                      speakers: _speakers,
-                      selectedSpeaker: _selectedSpeaker,
-                      onSpeakerChanged: (String? value) {
-                        if (value == null) return;
-                        setState(() => _selectedSpeaker = value);
-                      },
-                      sttAvailable: _sttAvailable,
-                      sttListening: _sttListening,
-                      liveTranscript: _liveTranscript,
-                      controller: _statementController,
-                      onAdd: _addStatement,
-                      onEntryTap: _showSpeakerPicker,
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: _RightColumn(sectionGap: sectionGap, stats: stats),
-                  ),
-                ],
-              )
-            else
-              Column(
-                children: [
-                  _LeftColumn(sectionGap: sectionGap),
-                  SizedBox(height: sectionGap),
-                  _CenterColumn(
-                    sectionGap: sectionGap,
-                    entries: _entries,
-                    speakers: _speakers,
-                    selectedSpeaker: _selectedSpeaker,
-                    onSpeakerChanged: (String? value) {
-                      if (value == null) return;
-                      setState(() => _selectedSpeaker = value);
-                    },
-                    sttAvailable: _sttAvailable,
-                    sttListening: _sttListening,
-                    liveTranscript: _liveTranscript,
-                    controller: _statementController,
-                    onAdd: _addStatement,
-                    onEntryTap: _showSpeakerPicker,
-                  ),
-                  SizedBox(height: sectionGap),
-                  _RightColumn(sectionGap: sectionGap, stats: stats),
-                ],
-              ),
-          ],
-        );
-
-        if (kIsWeb) {
-          content = Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                  maxWidth: MinuteTakerScreen._webMaxWidth),
-              child: content,
-            ),
-          );
-        }
-
-        return Container(
-          color: AppColors.pageBg,
-          child: ScrollConfiguration(
-            behavior: const _MinuteScrollBehavior(),
-            child: SingleChildScrollView(
-              padding: pagePadding,
-              child: content,
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
+
+// ── Header ─────────────────────────────────────────────────────────────────
 
 class _MinuteHeader extends StatelessWidget {
   final double textScale;
@@ -471,6 +699,8 @@ class _MinuteHeader extends StatelessWidget {
   final RecordingState recordingState;
   final VoidCallback onRecordToggle;
   final VoidCallback onStop;
+  final VoidCallback? onSendToSecretary;
+  final VoidCallback onSaveToArchive;
 
   const _MinuteHeader({
     required this.textScale,
@@ -481,6 +711,8 @@ class _MinuteHeader extends StatelessWidget {
     required this.recordingState,
     required this.onRecordToggle,
     required this.onStop,
+    required this.onSaveToArchive,
+    this.onSendToSecretary,
   });
 
   @override
@@ -490,8 +722,6 @@ class _MinuteHeader extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final bool isCompact = constraints.maxWidth < 980;
-
         final Widget metaRow = Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -515,66 +745,62 @@ class _MinuteHeader extends StatelessWidget {
           ],
         );
 
-        final Widget actions = Wrap(
-          spacing: 10,
-          runSpacing: 8,
-          children: [
-            MinuteTag(
-              label: recordingLabel,
-              icon: recordingIcon,
-              backgroundColor: AppColors.surfaceMuted,
-              textColor: AppColors.textSecondary,
-            ),
-            MinuteActionButton(
-              label: recordLabel,
-              icon: recordIcon,
-              onPressed: onRecordToggle,
-            ),
-            MinuteActionButton(
-              label: 'Stop',
-              icon: Icons.stop_circle_outlined,
-              onPressed: isIdle ? null : onStop,
-            ),
-            MinuteActionButton(
-              label: 'Save Draft',
-              icon: Icons.save_outlined,
-              onPressed: () {},
-            ),
-            MinuteActionButton(
-              label: 'Send to Secretary',
-              icon: Icons.send_outlined,
-              onPressed: () {},
-              isPrimary: true,
-            ),
-          ],
+        final Widget actions = SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MinuteTag(
+                label: recordingLabel,
+                icon: recordingIcon,
+                backgroundColor: AppColors.surfaceMuted,
+                textColor: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 10),
+              MinuteActionButton(
+                label: recordLabel,
+                icon: recordIcon,
+                onPressed: onRecordToggle,
+              ),
+              const SizedBox(width: 10),
+              MinuteActionButton(
+                label: 'Stop',
+                icon: Icons.stop_circle_outlined,
+                onPressed: isIdle ? null : onStop,
+              ),
+              const SizedBox(width: 10),
+              MinuteActionButton(
+                label: 'Send to Secretary',
+                icon: Icons.send_outlined,
+                onPressed: onSendToSecretary,
+                isPrimary: true,
+              ),
+              const SizedBox(width: 10),
+              MinuteActionButton(
+                label: 'Save to Archive',
+                icon: Icons.archive_outlined,
+                onPressed: onSaveToArchive,
+              ),
+            ],
+          ),
         );
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (isCompact)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  metaRow,
-                  const SizedBox(height: 10),
-                  actions,
-                ],
-              )
-            else
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: metaRow),
-                  const SizedBox(width: 12),
-                  Flexible(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: actions,
-                    ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                metaRow,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: actions,
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
             const SizedBox(height: 10),
             Text(
               'Faculty Council Meeting - Term 2',
@@ -587,105 +813,131 @@ class _MinuteHeader extends StatelessWidget {
   }
 }
 
-class _LeftColumn extends StatelessWidget {
+// ── Left column ────────────────────────────────────────────────────────────
+
+class _LeftColumn extends StatefulWidget {
   final double sectionGap;
+  final List<Attendee> attendees;
+  final List<AgendaItem> agenda;
+  final ValueChanged<Attendee> onAttendeeToggle;
+  final VoidCallback onAddAttendee;
+  final ValueChanged<String> onAddAgenda;
+  final ValueChanged<int> onRemoveAgenda;
 
-  const _LeftColumn({required this.sectionGap});
+  const _LeftColumn({
+    required this.sectionGap,
+    required this.attendees,
+    required this.agenda,
+    required this.onAttendeeToggle,
+    required this.onAddAttendee,
+    required this.onAddAgenda,
+    required this.onRemoveAgenda,
+  });
 
-  static const List<Attendee> _attendees = <Attendee>[
-    Attendee(
-      initials: 'AQ',
-      name: 'Dr. Abdulla Qusef',
-      role: 'Department Head',
-      isPresent: true,
-    ),
-    Attendee(
-      initials: 'MA',
-      name: 'Dr. Mohammad Ali',
-      role: 'Faculty Member',
-      isPresent: true,
-    ),
-    Attendee(
-      initials: 'FH',
-      name: 'Dr. Fatima Hasan',
-      role: 'Faculty Member',
-      isPresent: true,
-    ),
-    Attendee(
-      initials: 'AK',
-      name: 'Dr. Ahmed Khaled',
-      role: 'Faculty Member',
-      isPresent: true,
-    ),
-    Attendee(
-      initials: 'LS',
-      name: 'Dr. Laila Salem',
-      role: 'Faculty Member',
-      isPresent: false,
-    ),
-    Attendee(
-      initials: 'KM',
-      name: 'Dr. Khaled Mansi',
-      role: 'Faculty Member',
-      isPresent: true,
-    ),
-  ];
+  @override
+  State<_LeftColumn> createState() => _LeftColumnState();
+}
 
-  static const List<AgendaItem> _agenda = <AgendaItem>[
-    AgendaItem(index: 1, title: 'Meeting opening and welcome', isActive: true),
-    AgendaItem(index: 2, title: 'Review previous minutes', isActive: false),
-    AgendaItem(index: 3, title: 'Discuss research initiatives', isActive: false),
-  ];
+class _LeftColumnState extends State<_LeftColumn> {
+  final TextEditingController _agendaController = TextEditingController();
+
+  @override
+  void dispose() {
+    _agendaController.dispose();
+    super.dispose();
+  }
+
+  void _submitAgenda() {
+    final String text = _agendaController.text.trim();
+    if (text.isEmpty) return;
+    widget.onAddAgenda(text);
+    _agendaController.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final int presentCount = widget.attendees.where((Attendee a) => a.isPresent).length;
+
     return Column(
       children: [
         MinuteSectionCard(
           title: 'Attendance',
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MinuteTag(
+                label: '$presentCount/${widget.attendees.length}',
+                backgroundColor: AppColors.surfaceMuted,
+                textColor: AppColors.textPrimary,
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: widget.onAddAttendee,
+                icon: const Icon(Icons.person_add_outlined, size: 18),
+                color: AppColors.primaryTeal,
+                padding: EdgeInsets.zero,
+                tooltip: 'Add attendee',
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          child: AttendanceList(
+            attendees: widget.attendees,
+            onAttendeeToggle: widget.onAttendeeToggle,
+          ),
+        ),
+        SizedBox(height: widget.sectionGap),
+        MinuteSectionCard(
+          title: 'Agenda',
           trailing: MinuteTag(
-            label: '5/6',
+            label: '${widget.agenda.length}',
             backgroundColor: AppColors.surfaceMuted,
             textColor: AppColors.textPrimary,
           ),
-          child: AttendanceList(attendees: _attendees),
-        ),
-        SizedBox(height: sectionGap),
-        MinuteSectionCard(
-          title: 'Agenda',
-          trailing: IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.add_circle_outline, size: 18),
-            color: AppColors.primaryTeal,
-            padding: EdgeInsets.zero,
-          ),
           child: Column(
             children: [
-              AgendaList(items: _agenda),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text('Add new item', style: AppTextStyles.bodySmall),
-                    ),
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.border),
+              AgendaList(
+                items: widget.agenda,
+                onRemove: widget.onRemoveAgenda,
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _agendaController,
+                      onSubmitted: (_) => _submitAgenda(),
+                      decoration: InputDecoration(
+                        hintText: 'Add agenda item...',
+                        hintStyle: AppTextStyles.bodySmall,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        filled: true,
+                        fillColor: AppColors.surfaceMuted,
                       ),
-                      child: const Icon(Icons.add, size: 16),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _submitAgenda,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryTeal,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.add, size: 18, color: Colors.white),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -694,6 +946,8 @@ class _LeftColumn extends StatelessWidget {
     );
   }
 }
+
+// ── Center column ──────────────────────────────────────────────────────────
 
 class _CenterColumn extends StatelessWidget {
   final double sectionGap;
@@ -722,15 +976,10 @@ class _CenterColumn extends StatelessWidget {
     required this.onEntryTap,
   });
 
-  static const List<String> _tags = <String>[
-    'Meeting opening and welcome',
-  ];
-
   @override
   Widget build(BuildContext context) {
     final double viewportHeight = MediaQuery.sizeOf(context).height;
-    final double transcriptHeight =
-        (viewportHeight * 0.55).clamp(320.0, 520.0);
+    final double transcriptHeight = (viewportHeight * 0.55).clamp(320.0, 520.0);
 
     return Column(
       children: [
@@ -740,7 +989,7 @@ class _CenterColumn extends StatelessWidget {
             spacing: 8,
             children: [
               MinuteTag(
-                label: _tags.first,
+                label: 'Meeting opening and welcome',
                 backgroundColor: AppColors.tagGreenBg,
                 textColor: AppColors.primaryTeal,
               ),
@@ -768,7 +1017,7 @@ class _CenterColumn extends StatelessWidget {
                         primary: false,
                         itemCount:
                             entries.length + (liveTranscript.isEmpty ? 0 : 1),
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
                         itemBuilder: (BuildContext context, int index) {
                           if (liveTranscript.isNotEmpty && index == 0) {
                             return Container(
@@ -777,8 +1026,8 @@ class _CenterColumn extends StatelessWidget {
                                 color: AppColors.surfaceMuted,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                    color:
-                                        AppColors.border.withValues(alpha: 0.7)),
+                                    color: AppColors.border
+                                        .withValues(alpha: 0.7)),
                               ),
                               child: Row(
                                 children: [
@@ -793,9 +1042,9 @@ class _CenterColumn extends StatelessWidget {
                               ),
                             );
                           }
-                          final int entryIndex =
+                          final int ei =
                               liveTranscript.isEmpty ? index : index - 1;
-                          final TranscriptEntry entry = entries[entryIndex];
+                          final TranscriptEntry entry = entries[ei];
                           return TranscriptEntryTile(
                             entry: entry,
                             onTap: () => onEntryTap(entry),
@@ -814,41 +1063,39 @@ class _CenterColumn extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(height: sectionGap),
-        MinuteSectionCard(
-          title: 'Session Notes',
-          trailing: MinuteTag(
-            label: 'Live preview loading',
-            backgroundColor: AppColors.surfaceMuted,
-            textColor: AppColors.textSecondary,
-          ),
-          child: Container(
-            height: 120,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceMuted,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Notes will appear here as you capture statements, actions, and decisions.',
-                style: AppTextStyles.bodySmall,
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }
 }
 
+// ── Right column ───────────────────────────────────────────────────────────
+
 class _RightColumn extends StatelessWidget {
   final double sectionGap;
   final List<HandoffStat> stats;
+  final VoidCallback onPreview;
+  final VoidCallback onSendNotes;
+  final bool isSending;
+  final List<String> departments;
+  final String selectedDepartment;
+  final ValueChanged<String?> onDepartmentChanged;
+  final List<String> meetingTypes;
+  final String selectedMeetingType;
+  final ValueChanged<String?> onMeetingTypeChanged;
 
-  const _RightColumn({required this.sectionGap, required this.stats});
+  const _RightColumn({
+    required this.sectionGap,
+    required this.stats,
+    required this.onPreview,
+    required this.onSendNotes,
+    required this.departments,
+    required this.selectedDepartment,
+    required this.onDepartmentChanged,
+    required this.meetingTypes,
+    required this.selectedMeetingType,
+    required this.onMeetingTypeChanged,
+    this.isSending = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -866,6 +1113,83 @@ class _RightColumn extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               HandoffStats(stats: stats),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onPreview,
+                  icon: const Icon(Icons.preview_outlined, size: 16),
+                  label: Text('Preview Minutes', style: AppTextStyles.buttonMuted),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text('القسم', style: AppTextStyles.caption),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: selectedDepartment,
+                isExpanded: true,
+                items: departments
+                    .map((String d) => DropdownMenuItem<String>(
+                          value: d,
+                          child: Text(d,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              textDirection: TextDirection.rtl),
+                        ))
+                    .toList(),
+                onChanged: onDepartmentChanged,
+                decoration: InputDecoration(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.surfaceMuted,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text('نوع المجلس', style: AppTextStyles.caption),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: selectedMeetingType,
+                isExpanded: true,
+                items: meetingTypes
+                    .map((String t) => DropdownMenuItem<String>(
+                          value: t,
+                          child: Text(t,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              textDirection: TextDirection.rtl),
+                        ))
+                    .toList(),
+                onChanged: onMeetingTypeChanged,
+                decoration: InputDecoration(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.surfaceMuted,
+                ),
+              ),
               const SizedBox(height: 14),
               Text('Secretary', style: AppTextStyles.caption),
               const SizedBox(height: 6),
@@ -895,9 +1219,20 @@ class _RightColumn extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.send_outlined, size: 16),
-                  label: Text('Send Notes', style: AppTextStyles.buttonSmall),
+                  onPressed: isSending ? null : onSendNotes,
+                  icon: isSending
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.send_outlined, size: 16),
+                  label: Text(
+                      isSending ? 'Sending...' : 'Send Notes',
+                      style: AppTextStyles.buttonSmall),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryTeal,
                     foregroundColor: Colors.white,
@@ -910,23 +1245,12 @@ class _RightColumn extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(height: sectionGap),
-        MinuteSectionCard(
-          title: 'Action Items',
-          trailing: const Icon(Icons.checklist_outlined, size: 18),
-          child: Container(
-            height: 120,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'No action items captured yet.',
-              style: AppTextStyles.bodySmall,
-            ),
-          ),
-        ),
       ],
     );
   }
 }
+
+// ── Scroll behaviour ───────────────────────────────────────────────────────
 
 class _MinuteScrollBehavior extends MaterialScrollBehavior {
   const _MinuteScrollBehavior();

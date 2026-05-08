@@ -13,6 +13,7 @@ import 'screens/decision_graph_screen.dart';
 import 'screens/archive_screen.dart';
 import 'screens/user_management_screen.dart';
 import 'screens/minute_taker_screen.dart';
+import 'screens/secretary_inbox_screen.dart';
 import 'services/auth_service.dart';
 
 void main() {
@@ -91,6 +92,13 @@ final GoRouter _router = GoRouter(
           roleId != UserRole.admin) {
         return '/';
       }
+
+      final bool isSecretaryRoute = location == '/secretary';
+      if (isSecretaryRoute &&
+          roleId != UserRole.secretary &&
+          roleId != UserRole.admin) {
+        return '/';
+      }
     }
 
     return null;
@@ -163,6 +171,13 @@ final GoRouter _router = GoRouter(
           path: '/minute',
           pageBuilder: (BuildContext context, GoRouterState state) =>
               _fadeSlide(state: state, child: const MinuteTakerScreen()),
+        ),
+        GoRoute(
+          path: '/secretary',
+          pageBuilder: (BuildContext context, GoRouterState state) =>
+              _fadeSlide(
+                  state: state,
+                  child: const SecretaryInboxScreen()),
         ),
       ],
     ),

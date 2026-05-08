@@ -10,57 +10,54 @@ enum AudioRecorderStartStatus {
 
 class AudioRecorderService {
   final AudioRecorder _recorder = AudioRecorder();
+  String? _lastErrorMessage;
+
+  String? get lastErrorMessage => _lastErrorMessage;
 
   Future<AudioRecorderStartStatus> start() async {
-    if (kIsWeb && !_isSecureContext()) {
-      // Web recording requires a secure context (HTTPS or localhost).
-      return AudioRecorderStartStatus.unsupported;
-    }
+    _lastErrorMessage = null;
+    // On web, MediaRecorder and SpeechRecognition both compete for the
+    // microphone and Chrome raises an audio-capture error on the second one.
+    // Since SpeechRecognition already captures audio for transcription, we
+    // skip MediaRecorder on web entirely.
+    if (kIsWeb) return AudioRecorderStartStatus.started;
+
     final bool hasPermission = await _recorder.hasPermission();
     if (!hasPermission) {
+      _lastErrorMessage = 'Microphone permission denied.';
       return AudioRecorderStartStatus.permissionDenied;
     }
 
-    final RecordConfig config = kIsWeb
-        ? const RecordConfig(encoder: AudioEncoder.opus)
-        : const RecordConfig();
-    final String fileName = kIsWeb
-        ? 'recording_${DateTime.now().millisecondsSinceEpoch}.webm'
-        : 'recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
     try {
-      await _recorder.start(config, path: fileName);
+      await _recorder.start(
+        const RecordConfig(),
+        path: 'recording_${DateTime.now().millisecondsSinceEpoch}.m4a',
+      );
       return AudioRecorderStartStatus.started;
     } catch (error) {
-      debugPrint('AudioRecorderService.start failed: $error');
+      final String details = error.toString();
+      debugPrint('AudioRecorderService.start failed: $details');
+      _lastErrorMessage = details;
       return AudioRecorderStartStatus.failed;
     }
   }
 
   Future<void> pause() async {
-    if (await _recorder.isRecording()) {
-      await _recorder.pause();
-    }
+    if (kIsWeb) return;
+    if (await _recorder.isRecording()) await _recorder.pause();
   }
 
   Future<void> resume() async {
-    if (await _recorder.isPaused()) {
-      await _recorder.resume();
-    }
+    if (kIsWeb) return;
+    if (await _recorder.isPaused()) await _recorder.resume();
   }
 
   Future<String?> stop() async {
+    if (kIsWeb) return null;
     return _recorder.stop();
   }
 
   Future<void> dispose() async {
     await _recorder.dispose();
-  }
-
-  bool _isSecureContext() {
-    final Uri base = Uri.base;
-    if (base.scheme == 'https') return true;
-    final String host = base.host;
-    return host == 'localhost' || host == '127.0.0.1';
   }
 }

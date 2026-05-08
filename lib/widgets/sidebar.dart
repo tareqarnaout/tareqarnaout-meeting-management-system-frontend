@@ -43,6 +43,11 @@ class Sidebar extends StatefulWidget {
         icon: Icons.edit_note_outlined,
         route: '/minute',
         allowedRoles: [UserRole.minuteTaker]),
+    SidebarItem(
+        label: 'Secretary Inbox',
+        icon: Icons.inbox_outlined,
+        route: '/secretary',
+        allowedRoles: [UserRole.secretary]),
   ];
 
   @override

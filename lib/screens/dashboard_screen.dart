@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../constants/api_constants.dart';
 import '../constants/app_theme.dart';
+import '../models/meeting.dart';
+import '../services/auth_service.dart';
+import '../services/meeting_service.dart';
 import '../widgets/meeting_card.dart';
 import '../widgets/wave_scroll_button.dart';
 
@@ -17,6 +21,13 @@ class _DashboardScreenState extends State<DashboardScreen>
   late final AnimationController _controller;
   late final List<Animation<double>> _fadeAnimations;
   late final List<Animation<Offset>> _slideAnimations;
+
+  final MeetingService _meetingService = MeetingService();
+  final AuthService _authService = AuthService();
+
+  List<Meeting> _pendingMeetings = [];
+  String _userName = '';
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -52,6 +63,23 @@ class _DashboardScreenState extends State<DashboardScreen>
       );
     });
 
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final List<Object?> results = await Future.wait([
+      _meetingService.getPendingSignMeetings(),
+      _authService.getUserName(),
+    ]);
+
+    if (!mounted) return;
+
+    setState(() {
+      _pendingMeetings = results[0] as List<Meeting>;
+      _userName = (results[1] as String?) ?? 'User';
+      _isLoading = false;
+    });
+
     _controller.forward();
   }
 
@@ -73,6 +101,10 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool isMobile = constraints.maxWidth < 600;
@@ -91,7 +123,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Welcome back, Dr. Abdulla Guest',
+                        'Welcome back, $_userName',
                         style: TextStyle(
                           fontSize: isMobile ? 18 : 22,
                           fontWeight: FontWeight.w700,
@@ -134,71 +166,66 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildMeetingsSection(BuildContext context, bool isMobile) {
+    final List<Meeting> unsigned = _pendingMeetings
+        .where((Meeting m) =>
+            !m.signatories.any((Signatory s) => s.hasSigned))
+        .toList();
+    final List<Meeting> pendingOthers = _pendingMeetings
+        .where((Meeting m) => m.status == MeetingStatus.pendingApproval)
+        .toList();
+
     final Widget leftCol = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Meetings by Signature', style: AppTextStyles.heading3),
+        const Text('Meetings Awaiting Your Signature',
+            style: AppTextStyles.heading3),
         const SizedBox(height: 4),
-        Text('Meetings awaiting your signature',
+        Text('Meetings that require your signature',
             style: AppTextStyles.bodySmall),
         const SizedBox(height: 14),
-        MeetingCard(
-          title: 'Department Safety Review',
-          subtitle: 'Review safety protocols and compliance',
-          date: DateTime(2025, 10, 15),
-          status: 0,
-          onTap: () => context.go('/review'),
-        ),
-        const SizedBox(height: 10),
-        MeetingCard(
-          title: 'Research Collaboration Proposal',
-          subtitle: 'Cross-department research initiative',
-          date: DateTime(2025, 11, 3),
-          status: 0,
-          onTap: () => context.go('/review'),
-        ),
-        const SizedBox(height: 10),
-        MeetingCard(
-          title: 'Student Affairs Committee Meeting',
-          subtitle: 'Student welfare and academic support',
-          date: DateTime(2025, 9, 28),
-          status: 0,
-          onTap: () => context.go('/review'),
-        ),
+        if (unsigned.isEmpty)
+          _buildEmptyState('No meetings awaiting your signature')
+        else
+          ...unsigned.map((Meeting m) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: MeetingCard(
+                  title: m.title,
+                  subtitle: m.councilType ?? m.meetingContent ?? '',
+                  date: m.meetingDate,
+                  status: m.status,
+                  onTap: () => context.go('/review'),
+                ),
+              )),
       ],
     );
 
     final Widget rightCol = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Meetings Needing Others' Signatures",
-            style: AppTextStyles.heading3),
+        const Text('Pending Approval', style: AppTextStyles.heading3),
         const SizedBox(height: 4),
         Text('Tracking signature progress', style: AppTextStyles.bodySmall),
         const SizedBox(height: 14),
-        MeetingCard(
-          title: 'Curriculum Review Committee Meeting',
-          subtitle: 'Annual curriculum assessment',
-          date: DateTime(2025, 10, 20),
-          status: 1,
-          progress: 0.75,
-        ),
-        const SizedBox(height: 10),
-        MeetingCard(
-          title: 'Annual Budget Planning Session',
-          subtitle: 'FY2026 budget allocation',
-          date: DateTime(2025, 11, 8),
-          status: 1,
-          progress: 0.4,
-        ),
-        const SizedBox(height: 10),
-        MeetingCard(
-          title: 'Faculty Hiring Committee Update',
-          subtitle: 'New faculty recruitment',
-          date: DateTime(2025, 10, 5),
-          status: 1,
-          progress: 0.6,
-        ),
+        if (pendingOthers.isEmpty)
+          _buildEmptyState('No meetings pending approval')
+        else
+          ...pendingOthers.map((Meeting m) {
+            final int signed =
+                m.signatories.where((Signatory s) => s.hasSigned).length;
+            final int total =
+                m.signatureNeededCount > 0 ? m.signatureNeededCount : 1;
+            final double progress = (signed / total).clamp(0.0, 1.0);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: MeetingCard(
+                title: m.title,
+                subtitle: m.councilType ?? m.meetingContent ?? '',
+                date: m.meetingDate,
+                status: m.status,
+                progress: progress,
+              ),
+            );
+          }),
       ],
     );
 
@@ -223,37 +250,59 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  Widget _buildEmptyState(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      decoration: AppDecorations.cardWithBorder,
+      child: Column(
+        children: [
+          Icon(Icons.check_circle_outline,
+              size: 40, color: AppColors.textMuted),
+          const SizedBox(height: 10),
+          Text(message, style: AppTextStyles.bodySmall),
+        ],
+      ),
+    );
+  }
+
   Widget _buildArchivedSection(bool isMobile) {
-    final Widget card1 = _buildArchivedCard(
-      'Q3 Department Review',
-      DateTime(2025, 9, 15),
-    );
-    final Widget card2 = _buildArchivedCard(
-      'Lab Equipment Procurement',
-      DateTime(2025, 8, 22),
-    );
+    final List<Meeting> finalized = _pendingMeetings
+        .where((Meeting m) => m.status == MeetingStatus.finalized)
+        .toList();
+
+    if (finalized.isEmpty) return const SizedBox.shrink();
+
+    final List<Widget> cards = finalized
+        .take(2)
+        .map((Meeting m) => _buildArchivedCard(m.title, m.meetingDate))
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Recently Archived Meetings',
-            style: AppTextStyles.heading3),
+        const Text('Recently Finalized', style: AppTextStyles.heading3),
         const SizedBox(height: 14),
         if (isMobile)
           Column(
             children: [
-              card1,
-              const SizedBox(height: 12),
-              card2,
+              cards[0],
+              if (cards.length > 1) ...[
+                const SizedBox(height: 12),
+                cards[1],
+              ],
             ],
           )
         else
           Row(
             children: [
-              Expanded(child: card1),
+              Expanded(child: cards[0]),
+              if (cards.length > 1) ...[
+                const SizedBox(width: 16),
+                Expanded(child: cards[1]),
+              ],
               const SizedBox(width: 16),
-              Expanded(child: card2),
-              const SizedBox(width: 16),
+              if (cards.length < 2) const Expanded(child: SizedBox()),
               const Expanded(child: SizedBox()),
             ],
           ),
@@ -344,15 +393,25 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildStatsGrid(bool isMobile) {
+    final int pendingCount = _pendingMeetings
+        .where((Meeting m) => m.status == MeetingStatus.pendingApproval)
+        .length;
+    final int draftCount = _pendingMeetings
+        .where((Meeting m) => m.status == MeetingStatus.draft)
+        .length;
+    final int finalizedCount = _pendingMeetings
+        .where((Meeting m) => m.status == MeetingStatus.finalized)
+        .length;
+
     final List<Widget> cards = [
-      _buildStatCard(Icons.description_outlined, 'Meeting Drafts', '3',
-          AppColors.primaryTeal),
-      _buildStatCard(Icons.draw_outlined, 'My Signatures', '5',
-          AppColors.statusPending),
-      _buildStatCard(Icons.access_time, 'Recently Active', '8',
-          AppColors.statusApproved),
-      _buildStatCard(
-          Icons.history, 'Past Meetings', '24', AppColors.statusFinalized),
+      _buildStatCard(Icons.description_outlined, 'Meeting Drafts',
+          '$draftCount', AppColors.primaryTeal),
+      _buildStatCard(Icons.draw_outlined, 'Pending Signatures',
+          '$pendingCount', AppColors.statusPending),
+      _buildStatCard(Icons.assignment_outlined, 'Total Meetings',
+          '${_pendingMeetings.length}', AppColors.statusApproved),
+      _buildStatCard(Icons.check_circle_outline, 'Finalized',
+          '$finalizedCount', AppColors.statusFinalized),
     ];
 
     if (isMobile) {

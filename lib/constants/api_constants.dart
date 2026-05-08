@@ -1,5 +1,5 @@
 class ApiConstants {
-  static const String baseUrl = 'post-meeting-hheug7c7hqabhmbz.canadacentral-01.azurewebsites.net/api';
+  static const String baseUrl = 'http://localhost:5065/api';
   // http://localhost:5065
 // post-meeting-hheug7c7hqabhmbz.canadacentral-01.azurewebsites.net
 }
@@ -37,7 +37,7 @@ class UserRole {
       case secretary:
         return 'Secretary';
       case departmentHead:
-        return 'Department Head';
+        return 'Department Head / Dean';
       case staffMember:
         return 'Staff Member';
       case minuteTaker:

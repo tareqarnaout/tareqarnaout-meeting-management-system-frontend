@@ -59,7 +59,7 @@ class Attendee {
     switch (roleId) {
       case 1: return 'Admin';
       case 2: return 'Secretary';
-      case 3: return 'Department Head';
+      case 3: return 'Department Head / Dean';
       case 4: return 'Staff Member';
       case 5: return 'Minute Taker';
       default: return 'Staff Member';

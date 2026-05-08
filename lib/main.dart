@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'constants/app_theme.dart';
 import 'constants/api_constants.dart';
 import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
 import 'screens/shell_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/create_meeting_screen.dart';
@@ -77,8 +78,9 @@ final GoRouter _router = GoRouter(
     final bool loggedIn = await _authService.isAuthenticated();
     final bool goingToLogin = state.matchedLocation == '/login';
 
-    if (!loggedIn && !goingToLogin) return '/login';
-    if (loggedIn && goingToLogin) return '/';
+    final bool goingToRegister = state.matchedLocation == '/register';
+    if (!loggedIn && !goingToLogin && !goingToRegister) return '/login';
+    if (loggedIn && (goingToLogin || goingToRegister)) return '/';
 
     if (loggedIn) {
       final int? roleId = await _authService.getRoleId();
@@ -108,6 +110,11 @@ final GoRouter _router = GoRouter(
       path: '/login',
       pageBuilder: (BuildContext context, GoRouterState state) =>
           _fadeSlide(state: state, child: const LoginScreen()),
+    ),
+    GoRoute(
+      path: '/register',
+      pageBuilder: (BuildContext context, GoRouterState state) =>
+          _fadeSlide(state: state, child: const RegisterScreen()),
     ),
     ShellRoute(
       builder: (BuildContext context, GoRouterState state, Widget child) {

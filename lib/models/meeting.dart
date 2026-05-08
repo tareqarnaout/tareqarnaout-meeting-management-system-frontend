@@ -19,6 +19,9 @@ class Meeting {
   final String? decisionNumber;
   final String? councilType;
   final List<Map<String, dynamic>> relationships;
+  final String? signatoryName;
+  final String? signatoryTitle;
+  final int signatureNeededCount;
 
   Meeting({
     this.id,
@@ -39,6 +42,9 @@ class Meeting {
     this.decisionNumber,
     this.councilType,
     this.relationships = const [],
+    this.signatoryName,
+    this.signatoryTitle,
+    this.signatureNeededCount = 0,
   });
 
   factory Meeting.fromJson(Map<String, dynamic> json) {
@@ -74,6 +80,9 @@ class Meeting {
       sessionNumber: json['sessionNumber']?.toString(),
       decisionNumber: json['decisionNumber']?.toString(),
       councilType: CouncilType.fromDynamic(json['councilType']),
+      signatoryName: json['signatoryName'] as String?,
+      signatoryTitle: json['signatoryTitle'] as String?,
+      signatureNeededCount: json['signatureNeededCount'] as int? ?? 0,
     );
   }
 
@@ -93,6 +102,8 @@ class Meeting {
       if (councilType != null)
         'councilType': CouncilType.valueFromLabel(councilType!),
       if (relationships.isNotEmpty) 'relationships': relationships,
+      if (signatoryName != null) 'signatoryName': signatoryName,
+      if (signatoryTitle != null) 'signatoryTitle': signatoryTitle,
     };
   }
 }

@@ -28,16 +28,21 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       TextEditingController(text: '2025/2026');
   final TextEditingController _decisionNumberController =
       TextEditingController();
-  final TextEditingController _meetingDateController = TextEditingController();
+  final TextEditingController _meetingDateController =
+      TextEditingController(text: DateFormat('MM/dd/yyyy').format(DateTime.now()));
   final TextEditingController _decisionTextController = TextEditingController();
   final TextEditingController _connectionIdController = TextEditingController();
   final TextEditingController _copyToController = TextEditingController();
+  final TextEditingController _signatoryNameController =
+      TextEditingController(text: 'أ.د. عبدالله');
+  final TextEditingController _signatoryTitleController =
+      TextEditingController(text: 'رئيس القسم');
 
   final MeetingService _meetingService = MeetingService();
 
   String _selectedCouncilType = 'مجلس القسم';
   DateTime? _selectedIssueDate;
-  DateTime? _selectedMeetingDate;
+  DateTime? _selectedMeetingDate = DateTime.now();
   bool _isSubmitting = false;
 
   final List<Map<String, dynamic>> _selectedRecipients = [];
@@ -194,6 +199,8 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     _decisionTextController.dispose();
     _connectionIdController.dispose();
     _copyToController.dispose();
+    _signatoryNameController.dispose();
+    _signatoryTitleController.dispose();
     _recipientSearchController.dispose();
     _signatorySearchController.dispose();
     super.dispose();
@@ -285,6 +292,8 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
                 'type': _typeToInt[c.relationshipType] ?? 0,
               })
           .toList(),
+      signatoryName: _signatoryNameController.text.trim(),
+      signatoryTitle: _signatoryTitleController.text.trim(),
     );
 
     final bool ok = await _meetingService.createMeeting(meeting);
@@ -936,6 +945,45 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
           ),
           const SizedBox(height: 20),
 
+          // Signatory Info
+          _buildSectionCard(
+            icon: Icons.person_outline,
+            title: 'معلومات الموقع',
+            subtitle: 'بيانات الموقع التي ستظهر في أسفل الوثيقة.',
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildField(
+                    label: 'المسمى الوظيفي',
+                    child: TextField(
+                      controller: _signatoryTitleController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: AppDecorations.inputDecoration(
+                        '',
+                        hint: 'مثال: رئيس القسم',
+                      ).copyWith(labelText: null),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildField(
+                    label: 'اسم الموقع',
+                    child: TextField(
+                      controller: _signatoryNameController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: AppDecorations.inputDecoration(
+                        '',
+                        hint: 'مثال: أ.د. عبدالله',
+                      ).copyWith(labelText: null),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
           // Required Signatures
           _buildSectionCard(
             icon: Icons.draw_outlined,
@@ -1201,6 +1249,8 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       decisionNumber: _decisionNumberController.text.trim(),
       decisionText: _decisionTextController.text.trim(),
       copyToList: List<String>.from(_copyToList),
+      signatoryName: _signatoryNameController.text.trim(),
+      signatoryTitle: _signatoryTitleController.text.trim(),
     );
   }
 

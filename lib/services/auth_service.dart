@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'api_service.dart';
@@ -38,6 +39,45 @@ class AuthService {
       return false;
     } catch (e) {
       return false;
+    }
+  }
+
+  Future<String?> registerPassword({
+    required String email,
+    required String password,
+    required String repeatedPass,
+  }) async {
+    try {
+      final response = await _api.post('/auth/registerPass', {
+        'email': email,
+        'password': password,
+        'repeatedPass': repeatedPass,
+      });
+
+      if (response.statusCode == 200) {
+        return null;
+      }
+
+      final String body = response.body;
+      if (body.isNotEmpty) {
+        try {
+          final dynamic decoded = jsonDecode(body);
+          if (decoded is String) return decoded;
+          if (decoded is Map && decoded.containsKey('message')) {
+            return decoded['message'] as String;
+          }
+        } catch (_) {
+          return body;
+        }
+      }
+
+      if (response.statusCode == 400) {
+        return 'Invalid request. Please check your details.';
+      }
+      return 'Registration failed. Please try again.';
+    } catch (e) {
+      debugPrint('[AuthService] registerPassword error: $e');
+      rethrow;
     }
   }
 

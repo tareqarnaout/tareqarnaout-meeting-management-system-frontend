@@ -1,33 +1,8 @@
 import 'package:flutter/material.dart';
+import '../constants/api_constants.dart';
 import '../constants/app_theme.dart';
-
-class _UserData {
-  final String initials;
-  final String name;
-  final String nameAr;
-  final String email;
-  final String role;
-  final String department;
-  final bool isActive;
-  final bool canSign;
-  final int meetingsSigned;
-  final String lastLogin;
-  final Color avatarColor;
-
-  const _UserData({
-    required this.initials,
-    required this.name,
-    required this.nameAr,
-    required this.email,
-    required this.role,
-    required this.department,
-    this.isActive = true,
-    this.canSign = true,
-    required this.meetingsSigned,
-    required this.lastLogin,
-    required this.avatarColor,
-  });
-}
+import '../models/user.dart';
+import '../services/user_service.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -38,142 +13,198 @@ class UserManagementScreen extends StatefulWidget {
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final UserService _userService = UserService();
+
   String _roleFilter = 'All Roles';
-  String _statusFilter = 'All Statuses';
+  List<AppUser> _users = [];
+  bool _isLoading = true;
+  String? _error;
 
-  static const List<_UserData> _allUsers = [
-    _UserData(
-      initials: 'DQ',
-      name: 'Dr. Abdulla Qusef',
-      nameAr: 'د. عبدالله قصف',
-      email: 'a.qusef@psut.edu.jo',
-      role: 'Admin',
-      department: 'Computer Science',
-      meetingsSigned: 47,
-      lastLogin: '2026-04-17 09:30',
-      avatarColor: Color(0xFFE57373),
-    ),
-    _UserData(
-      initials: 'DA',
-      name: 'Dr. Ahmad Al-Ali',
-      nameAr: 'د. أحمد العلي',
-      email: 'a.alali@psut.edu.jo',
-      role: 'Professor',
-      department: 'Computer Science',
-      meetingsSigned: 35,
-      lastLogin: '2026-04-16 14:22',
-      avatarColor: Color(0xFF2E7D9E),
-    ),
-    _UserData(
-      initials: 'DA',
-      name: 'Dr. Mohammad Al-Hassan',
-      nameAr: 'د. محمد الحسن',
-      email: 'm.alhassan@psut.edu.jo',
-      role: 'Professor',
-      department: 'Computer Science',
-      meetingsSigned: 42,
-      lastLogin: '2026-04-15 11:05',
-      avatarColor: Color(0xFF2E7D9E),
-    ),
-    _UserData(
-      initials: 'DA',
-      name: 'Dr. Fatima Al-Khaldi',
-      nameAr: 'د. فاطمة الخالدي',
-      email: 'f.alkhaldi@psut.edu.jo',
-      role: 'Professor',
-      department: 'Computer Science',
-      meetingsSigned: 28,
-      lastLogin: '2026-04-17 08:10',
-      avatarColor: Color(0xFF2E7D9E),
-    ),
-    _UserData(
-      initials: 'DA',
-      name: 'Dr. Khalid Al-Salem',
-      nameAr: 'د. خالد السالم',
-      email: 'k.alsalem@psut.edu.jo',
-      role: 'Professor',
-      department: 'Computer Science',
-      meetingsSigned: 31,
-      lastLogin: '2026-04-14 16:45',
-      avatarColor: Color(0xFF2E7D9E),
-    ),
-    _UserData(
-      initials: 'DA',
-      name: 'Dr. Nora Al-Marri',
-      nameAr: 'د. نورة المري',
-      email: 'n.almarri@psut.edu.jo',
-      role: 'Professor',
-      department: 'Computer Science',
-      meetingsSigned: 39,
-      lastLogin: '2026-04-13 10:30',
-      avatarColor: Color(0xFF2E7D9E),
-    ),
-    _UserData(
-      initials: 'DA',
-      name: 'Dr. Youssef Al-Nasser',
-      nameAr: 'د. يوسف الناصر',
-      email: 'y.alnasser@psut.edu.jo',
-      role: 'Professor',
-      department: 'Computer Science',
-      isActive: false,
-      canSign: false,
-      meetingsSigned: 18,
-      lastLogin: '2026-03-20 09:15',
-      avatarColor: Color(0xFF2E7D9E),
-    ),
-    _UserData(
-      initials: 'SA',
-      name: 'Sara Al-Rashid',
-      nameAr: 'سارة الراشد',
-      email: 's.alrashid@psut.edu.jo',
-      role: 'Secretary',
-      department: 'Computer Science',
-      meetingsSigned: 22,
-      lastLogin: '2026-04-17 07:50',
-      avatarColor: Color(0xFF8B5CF6),
-    ),
-    _UserData(
-      initials: 'LK',
-      name: 'Layla Al-Khatib',
-      nameAr: 'ليلى الخطيب',
-      email: 'l.alkhatib@psut.edu.jo',
-      role: 'Minute Taker',
-      department: 'Computer Science',
-      meetingsSigned: 15,
-      lastLogin: '2026-04-16 09:00',
-      avatarColor: Color(0xFFF59E0B),
-    ),
-    _UserData(
-      initials: 'OT',
-      name: 'Omar Al-Tamimi',
-      nameAr: 'عمر التميمي',
-      email: 'o.altamimi@psut.edu.jo',
-      role: 'Staff Member',
-      department: 'Computer Science',
-      meetingsSigned: 8,
-      lastLogin: '2026-04-10 13:20',
-      avatarColor: Color(0xFF10B981),
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
 
-  List<_UserData> get _filteredUsers {
-    return _allUsers.where((_UserData u) {
+  Future<void> _loadUsers() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final List<AppUser> users = await _userService.getUsers();
+      setState(() {
+        _users = users;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load users';
+        _isLoading = false;
+      });
+    }
+  }
+
+  List<AppUser> get _filteredUsers {
+    return _users.where((AppUser u) {
       final String query = _searchController.text.toLowerCase();
       if (query.isNotEmpty &&
           !u.name.toLowerCase().contains(query) &&
-          !u.email.toLowerCase().contains(query) &&
-          !u.department.toLowerCase().contains(query)) {
+          !u.email.toLowerCase().contains(query)) {
         return false;
       }
-      if (_roleFilter != 'All Roles' && u.role != _roleFilter) return false;
-      if (_statusFilter == 'Active' && !u.isActive) return false;
-      if (_statusFilter == 'Inactive' && u.isActive) return false;
+      if (_roleFilter != 'All Roles' &&
+          UserRole.label(u.roleId) != _roleFilter) {
+        return false;
+      }
       return true;
     }).toList();
   }
 
-  int get _activeCount => _allUsers.where((_UserData u) => u.isActive).length;
-  int get _inactiveCount => _allUsers.where((_UserData u) => !u.isActive).length;
+  void _showAddUserDialog() {
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController emailController = TextEditingController();
+    int selectedRoleId = UserRole.staffMember;
+    final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        return StatefulBuilder(
+          builder: (BuildContext ctx, StateSetter setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              title: const Text('Add New User', style: AppTextStyles.heading2),
+              content: SizedBox(
+                width: 420,
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: nameController,
+                        decoration: AppDecorations.inputDecoration(
+                          'Full Name',
+                          hint: 'Enter full name',
+                        ),
+                        validator: (String? v) =>
+                            (v == null || v.trim().isEmpty)
+                                ? 'Name is required'
+                                : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: emailController,
+                        decoration: AppDecorations.inputDecoration(
+                          'Email',
+                          hint: 'Enter email address',
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (String? v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Email is required';
+                          }
+                          if (!v.contains('@')) return 'Enter a valid email';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<int>(
+                        initialValue: selectedRoleId,
+                        decoration: AppDecorations.inputDecoration('Role'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: UserRole.admin, child: Text('Admin')),
+                          DropdownMenuItem(
+                              value: UserRole.secretary,
+                              child: Text('Secretary')),
+                          DropdownMenuItem(
+                              value: UserRole.departmentHead,
+                              child: Text('Department Head / Dean')),
+                          DropdownMenuItem(
+                              value: UserRole.staffMember,
+                              child: Text('Staff Member')),
+                          DropdownMenuItem(
+                              value: UserRole.minuteTaker,
+                              child: Text('Minute Taker')),
+                        ],
+                        onChanged: (int? v) {
+                          if (v != null) {
+                            setDialogState(() => selectedRoleId = v);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+                    Navigator.pop(ctx);
+                    await _addUser(
+                      nameController.text.trim(),
+                      emailController.text.trim(),
+                      selectedRoleId,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.textPrimary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Add User'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _addUser(String name, String email, int roleId) async {
+    try {
+      final bool success = await _userService.addUser(
+        fullName: name,
+        email: email,
+        roleId: roleId,
+      );
+      if (!mounted) return;
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User added successfully'),
+            backgroundColor: AppColors.statusApproved,
+          ),
+        );
+        _loadUsers();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to add user'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('An error occurred while adding the user'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -183,7 +214,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<_UserData> users = _filteredUsers;
+    final List<AppUser> users = _filteredUsers;
 
     return Container(
       color: AppColors.pageBg,
@@ -210,7 +241,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: _showAddUserDialog,
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add New User'),
                   style: ElevatedButton.styleFrom(
@@ -229,19 +260,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             // Stats cards
             Row(
               children: [
-                _buildStatCard('Total Users', '${_allUsers.length}',
-                    AppColors.primaryBlue),
+                _buildStatCard(
+                    'Total Users', '${_users.length}', AppColors.primaryBlue),
                 const SizedBox(width: 14),
                 _buildStatCard(
-                    'Active', '$_activeCount', AppColors.statusApproved),
-                const SizedBox(width: 14),
-                _buildStatCard(
-                    'Inactive', '$_inactiveCount', AppColors.textMuted),
-                const SizedBox(width: 14),
-                _buildStatCard('Pending', '1', AppColors.statusPending),
+                    'Roles',
+                    '${_users.map((AppUser u) => u.roleId).toSet().length}',
+                    AppColors.statusApproved),
               ]
-                  .map((Widget w) =>
-                      w is SizedBox ? w : Expanded(child: w))
+                  .map((Widget w) => w is SizedBox ? w : Expanded(child: w))
                   .toList(),
             ),
             const SizedBox(height: 24),
@@ -258,7 +285,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       onChanged: (_) => setState(() {}),
                       decoration: AppDecorations.inputDecoration(
                         '',
-                        hint: 'Search by name, email, or department...',
+                        hint: 'Search by name or email...',
                         prefixIcon: const Icon(Icons.search,
                             size: 18, color: AppColors.textMuted),
                       ).copyWith(labelText: null),
@@ -270,20 +297,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     items: const [
                       'All Roles',
                       'Admin',
-                      'Professor',
                       'Secretary',
+                      'Department Head / Dean',
                       'Staff Member',
                       'Minute Taker',
                     ],
                     onChanged: (String? v) =>
                         setState(() => _roleFilter = v ?? 'All Roles'),
-                  ),
-                  const SizedBox(width: 10),
-                  _buildDropdown(
-                    value: _statusFilter,
-                    items: const ['All Statuses', 'Active', 'Inactive'],
-                    onChanged: (String? v) =>
-                        setState(() => _statusFilter = v ?? 'All Statuses'),
                   ),
                 ],
               ),
@@ -292,44 +312,71 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
             // Count label
             Text(
-              'Showing ${users.length} of ${_allUsers.length} users',
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary),
+              'Showing ${users.length} of ${_users.length} users',
+              style:
+                  const TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 10),
 
-            // Table
-            Container(
-              decoration: AppDecorations.cardWithBorder,
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  // Table header
-                  Container(
-                    color: const Color(0xFFF8FAFC),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 14),
-                    child: Row(
-                      children: const [
-                        Expanded(flex: 5, child: _HeaderCell('User')),
-                        Expanded(flex: 3, child: _HeaderCell('Role')),
-                        Expanded(flex: 3, child: _HeaderCell('Department')),
-                        Expanded(flex: 2, child: _HeaderCell('Status')),
-                        Expanded(flex: 2, child: _HeaderCell('Can Sign')),
-                        Expanded(
-                            flex: 3,
-                            child: _HeaderCell('Meetings Signed')),
-                        Expanded(flex: 3, child: _HeaderCell('Last Login')),
-                        Expanded(flex: 2, child: _HeaderCell('Actions')),
-                      ],
-                    ),
+            // Content
+            if (_isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(60),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_error != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(60),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 48, color: Colors.red),
+                      const SizedBox(height: 12),
+                      Text(_error!,
+                          style: const TextStyle(color: Colors.red)),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: _loadUsers,
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
-                  const Divider(height: 1, color: AppColors.border),
-                  // Table rows
-                  ...users.map((_UserData user) => _buildUserRow(user)),
-                ],
+                ),
+              )
+            else
+              // Table
+              Container(
+                decoration: AppDecorations.cardWithBorder,
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    Container(
+                      color: const Color(0xFFF8FAFC),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 14),
+                      child: Row(
+                        children: const [
+                          Expanded(flex: 5, child: _HeaderCell('User')),
+                          Expanded(flex: 3, child: _HeaderCell('Role')),
+                          Expanded(flex: 3, child: _HeaderCell('Email')),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1, color: AppColors.border),
+                    if (users.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(40),
+                        child: Text('No users found',
+                            style: TextStyle(color: AppColors.textMuted)),
+                      )
+                    else
+                      ...users.map((AppUser user) => _buildUserRow(user)),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -410,26 +457,33 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
-  Widget _buildUserRow(_UserData user) {
+  Widget _buildUserRow(AppUser user) {
+    final String initials = user.name.isNotEmpty
+        ? user.name
+            .split(' ')
+            .where((String s) => s.isNotEmpty)
+            .take(2)
+            .map((String s) => s[0].toUpperCase())
+            .join()
+        : '?';
+    final String roleName = UserRole.label(user.roleId);
+
     return Container(
       decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppColors.divider),
-        ),
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
-          // User cell
           Expanded(
             flex: 5,
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: user.avatarColor,
+                  backgroundColor: _avatarColor(user.roleId),
                   child: Text(
-                    user.initials,
+                    initials,
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -439,129 +493,32 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              user.name,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            user.nameAr,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        user.email,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    user.name,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
           ),
-          // Role
           Expanded(
             flex: 3,
             child: Align(
               alignment: Alignment.centerLeft,
-              child: _RoleBadge(role: user.role),
+              child: _RoleBadge(role: roleName),
             ),
           ),
-          // Department
-          Expanded(
-            flex: 3,
-            child: Text(user.department, style: AppTextStyles.bodySmall),
-          ),
-          // Status
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: user.isActive
-                        ? AppColors.statusApproved
-                        : AppColors.textMuted,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  user.isActive ? 'Active' : 'Inactive',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: user.isActive
-                        ? AppColors.statusApproved
-                        : AppColors.textMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Can Sign toggle
-          Expanded(
-            flex: 2,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Switch(
-                value: user.canSign,
-                onChanged: (_) {},
-                activeThumbColor: Colors.white,
-                activeTrackColor: AppColors.textPrimary,
-                inactiveThumbColor: Colors.white,
-                inactiveTrackColor: AppColors.border,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ),
-          // Meetings Signed
           Expanded(
             flex: 3,
             child: Text(
-              '${user.meetingsSigned}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ),
-          // Last Login
-          Expanded(
-            flex: 3,
-            child: Text(user.lastLogin, style: AppTextStyles.bodySmall),
-          ),
-          // Actions
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                _actionButton(Icons.edit_outlined, () {}),
-                const SizedBox(width: 4),
-                _actionButton(Icons.more_vert, () {}),
-              ],
+              user.email,
+              style: AppTextStyles.bodySmall,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -569,20 +526,21 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     );
   }
 
-  Widget _actionButton(IconData icon, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-        child: Icon(icon, size: 14, color: AppColors.textSecondary),
-      ),
-    );
+  Color _avatarColor(int roleId) {
+    switch (roleId) {
+      case UserRole.admin:
+        return const Color(0xFFE57373);
+      case UserRole.secretary:
+        return const Color(0xFF8B5CF6);
+      case UserRole.minuteTaker:
+        return const Color(0xFFF59E0B);
+      case UserRole.staffMember:
+        return const Color(0xFF10B981);
+      case UserRole.departmentHead:
+        return const Color(0xFF2E7D9E);
+      default:
+        return AppColors.textMuted;
+    }
   }
 }
 
@@ -616,8 +574,8 @@ class _RoleBadge extends StatelessWidget {
         color = const Color(0xFFEF4444);
         icon = Icons.shield_outlined;
         break;
-      case 'Professor':
-        color = AppColors.primaryTeal;
+      case 'Department Head / Dean':
+        color = const Color(0xFF2E7D9E);
         icon = Icons.person_outline;
         break;
       case 'Secretary':

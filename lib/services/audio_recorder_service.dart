@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 enum AudioRecorderStartStatus {
@@ -29,9 +30,11 @@ class AudioRecorderService {
     }
 
     try {
+      final String dir = (await getTemporaryDirectory()).path;
+      final String path = '$dir/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await _recorder.start(
         const RecordConfig(),
-        path: 'recording_${DateTime.now().millisecondsSinceEpoch}.m4a',
+        path: path,
       );
       return AudioRecorderStartStatus.started;
     } catch (error) {

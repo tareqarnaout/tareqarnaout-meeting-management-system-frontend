@@ -88,46 +88,7 @@ class _SidebarState extends State<Sidebar> {
       ),
       child: Column(
         children: [
-          // Logo area
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: Row(
-              children: [
-                Image.asset(
-                  'assets/psutLogo.png',
-                  width: 36,
-                  height: 36,
-                  filterQuality: FilterQuality.high,
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Post-Meeting',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        'Management System',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Divider(color: AppColors.border.withValues(alpha: 0.5), height: 1),
-          const SizedBox(height: 12),
+          const SizedBox(height: 24),
           // Nav items
           ...visibleItems.map((SidebarItem item) {
             final bool isActive = widget.currentRoute == item.route;

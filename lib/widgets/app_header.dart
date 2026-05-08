@@ -3,10 +3,61 @@ import 'package:go_router/go_router.dart';
 import '../constants/app_theme.dart';
 import '../services/auth_service.dart';
 
-class AppHeader extends StatelessWidget {
+class AppHeader extends StatefulWidget {
   final bool showMenuButton;
 
   const AppHeader({super.key, this.showMenuButton = false});
+
+  @override
+  State<AppHeader> createState() => _AppHeaderState();
+}
+
+class _AppHeaderState extends State<AppHeader> {
+  String _userName = '';
+  String _roleName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    final AuthService auth = AuthService();
+    final String? name = await auth.getUserName();
+    final int? roleId = await auth.getRoleId();
+    if (mounted) {
+      setState(() {
+        _userName = name ?? 'User';
+        _roleName = _roleLabel(roleId);
+      });
+    }
+  }
+
+  String _roleLabel(int? roleId) {
+    switch (roleId) {
+      case 1:
+        return 'Admin';
+      case 2:
+        return 'Secretary';
+      case 3:
+        return 'Department Head';
+      case 4:
+        return 'Staff Member';
+      case 5:
+        return 'Minute Taker';
+      default:
+        return '';
+    }
+  }
+
+  String _initials(String name) {
+    final List<String> parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+    }
+    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +72,7 @@ class AppHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (showMenuButton)
+          if (widget.showMenuButton)
             IconButton(
               icon: const Icon(Icons.menu, color: AppColors.textPrimary),
               onPressed: () => Scaffold.of(context).openDrawer(),
@@ -108,9 +159,9 @@ class AppHeader extends StatelessWidget {
                 CircleAvatar(
                   radius: 16,
                   backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-                  child: const Text(
-                    'AG',
-                    style: TextStyle(
+                  child: Text(
+                    _initials(_userName),
+                    style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: AppColors.primaryBlue,
@@ -118,25 +169,26 @@ class AppHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Column(
+                Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Dr. Abdulla Guest',
-                      style: TextStyle(
+                      _userName,
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    Text(
-                      'Department Head',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: AppColors.textSecondary,
+                    if (_roleName.isNotEmpty)
+                      Text(
+                        _roleName,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                    ),
                   ],
                 ),
                 const SizedBox(width: 4),

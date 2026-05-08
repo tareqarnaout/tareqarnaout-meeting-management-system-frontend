@@ -20,32 +20,36 @@ class ShellScreen extends StatelessWidget {
         MediaQuery.of(context).size.width < _mobileBreakpoint;
 
     if (isMobile) {
-      return Scaffold(
-        drawer: Sidebar(currentRoute: currentRoute),
-        body: SafeArea(
-          child: Column(
-            children: [
-              const AppHeader(showMenuButton: true),
-              Expanded(child: child),
-            ],
+      return SelectionArea(
+        child: Scaffold(
+          drawer: Sidebar(currentRoute: currentRoute),
+          body: SafeArea(
+            child: Column(
+              children: [
+                const AppHeader(showMenuButton: true),
+                Expanded(child: child),
+              ],
+            ),
           ),
         ),
       );
     }
 
-    return Scaffold(
-      body: Row(
-        children: [
-          Sidebar(currentRoute: currentRoute),
-          Expanded(
-            child: Column(
-              children: [
-                const AppHeader(),
-                Expanded(child: child),
-              ],
+    return SelectionArea(
+      child: Scaffold(
+        body: Row(
+          children: [
+            Sidebar(currentRoute: currentRoute),
+            Expanded(
+              child: Column(
+                children: [
+                  const AppHeader(),
+                  Expanded(child: child),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -103,7 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 6),
                 // Subtitle
                 Text(
-                  'Department of Computer Science',
+                  'Department of Software Engineering',
                   style: TextStyle(
                     fontSize: 14,
                     color: AppColors.textSecondary,
@@ -174,30 +174,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           ).copyWith(labelText: null),
                         ),
                         const SizedBox(height: 20),
-                        // Password label row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Password',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () {},
-                              child: const Text(
-                                'Forgot password?',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.primaryBlue,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
+                        const Text(
+                          'Password',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         TextField(
@@ -233,31 +216,33 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 16),
                         // Footer link
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 4,
-                          runSpacing: 4,
-                          children: [
-                            Text(
-                              "Don't have an account? ",
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () {},
-                              child: const Text(
-                                'Contact IT Support',
+                        Center(
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              Text(
+                                "Don't have an account? ",
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: AppColors.primaryBlue,
-                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
                                 ),
                               ),
-                            ),
-                          ],
+                              GestureDetector(
+                                onTap: () => context.go('/register'),
+                                child: const Text(
+                                  'Register New Account',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.primaryBlue,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -266,7 +251,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 32),
                 // Copyright
                 Text(
-                  '\u00a9 2026 Department of Computer Science. All rights reserved.',
+                  '\u00a9 2026 Department of Software Engineering. All rights reserved.',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textMuted,

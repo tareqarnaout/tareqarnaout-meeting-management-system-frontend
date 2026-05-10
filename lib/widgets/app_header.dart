@@ -126,16 +126,6 @@ class _AppHeaderState extends State<AppHeader> {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             itemBuilder: (BuildContext context) => [
               const PopupMenuItem(
-                value: 'profile',
-                child: Row(
-                  children: [
-                    Icon(Icons.person_outline, size: 16),
-                    SizedBox(width: 8),
-                    Text('Profile'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
                 value: 'logout',
                 child: Row(
                   children: [

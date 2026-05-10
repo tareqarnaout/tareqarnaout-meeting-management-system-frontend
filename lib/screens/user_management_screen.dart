@@ -216,98 +216,165 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Widget build(BuildContext context) {
     final List<AppUser> users = _filteredUsers;
 
-    return Container(
-      color: AppColors.pageBg,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row
-            Row(
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool isMobile = constraints.maxWidth < 600;
+        final double padding = isMobile ? 16 : 28;
+
+        return Container(
+          color: AppColors.pageBg,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(padding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('User Management', style: AppTextStyles.heading1),
-                      SizedBox(height: 4),
-                      Text(
-                        'Manage faculty members, staff, and system access permissions',
-                        style: TextStyle(
-                            fontSize: 13, color: AppColors.textSecondary),
+                // Header row
+                if (isMobile) ...[
+                  const Text('User Management', style: AppTextStyles.heading1),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Manage faculty members, staff, and system access permissions',
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _showAddUserDialog,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Add New User'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.textPrimary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                ] else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text('User Management',
+                                style: AppTextStyles.heading1),
+                            SizedBox(height: 4),
+                            Text(
+                              'Manage faculty members, staff, and system access permissions',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _showAddUserDialog,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add New User'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.textPrimary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
                       ),
                     ],
                   ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _showAddUserDialog,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add New User'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.textPrimary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-            // Stats cards
-            Row(
-              children: [
-                _buildStatCard(
-                    'Total Users', '${_users.length}', AppColors.primaryBlue),
-                const SizedBox(width: 14),
-                _buildStatCard(
-                    'Roles',
-                    '${_users.map((AppUser u) => u.roleId).toSet().length}',
-                    AppColors.statusApproved),
-              ]
-                  .map((Widget w) => w is SizedBox ? w : Expanded(child: w))
-                  .toList(),
-            ),
-            const SizedBox(height: 24),
-
-            // Search + filters
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: AppDecorations.cardWithBorder,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (_) => setState(() {}),
-                      decoration: AppDecorations.inputDecoration(
-                        '',
-                        hint: 'Search by name or email...',
-                        prefixIcon: const Icon(Icons.search,
-                            size: 18, color: AppColors.textMuted),
-                      ).copyWith(labelText: null),
+                // Stats cards
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard('Total Users',
+                          '${_users.length}', AppColors.primaryBlue),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  _buildDropdown(
-                    value: _roleFilter,
-                    items: const [
-                      'All Roles',
-                      'Admin',
-                      'Secretary',
-                      'Department Head / Dean',
-                      'Staff Member',
-                      'Minute Taker',
-                    ],
-                    onChanged: (String? v) =>
-                        setState(() => _roleFilter = v ?? 'All Roles'),
-                  ),
-                ],
-              ),
-            ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _buildStatCard(
+                          'Roles',
+                          '${_users.map((AppUser u) => u.roleId).toSet().length}',
+                          AppColors.statusApproved),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Search + filters
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: AppDecorations.cardWithBorder,
+                  child: isMobile
+                      ? Column(
+                          children: [
+                            TextField(
+                              controller: _searchController,
+                              onChanged: (_) => setState(() {}),
+                              decoration: AppDecorations.inputDecoration(
+                                '',
+                                hint: 'Search by name or email...',
+                                prefixIcon: const Icon(Icons.search,
+                                    size: 18, color: AppColors.textMuted),
+                              ).copyWith(labelText: null),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: _buildDropdown(
+                                value: _roleFilter,
+                                items: const [
+                                  'All Roles',
+                                  'Admin',
+                                  'Secretary',
+                                  'Department Head / Dean',
+                                  'Staff Member',
+                                  'Minute Taker',
+                                ],
+                                onChanged: (String? v) => setState(
+                                    () => _roleFilter = v ?? 'All Roles'),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _searchController,
+                                onChanged: (_) => setState(() {}),
+                                decoration: AppDecorations.inputDecoration(
+                                  '',
+                                  hint: 'Search by name or email...',
+                                  prefixIcon: const Icon(Icons.search,
+                                      size: 18, color: AppColors.textMuted),
+                                ).copyWith(labelText: null),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            _buildDropdown(
+                              value: _roleFilter,
+                              items: const [
+                                'All Roles',
+                                'Admin',
+                                'Secretary',
+                                'Department Head / Dean',
+                                'Staff Member',
+                                'Minute Taker',
+                              ],
+                              onChanged: (String? v) => setState(
+                                  () => _roleFilter = v ?? 'All Roles'),
+                            ),
+                          ],
+                        ),
+                ),
             const SizedBox(height: 16),
 
             // Count label
@@ -351,35 +418,48 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               Container(
                 decoration: AppDecorations.cardWithBorder,
                 clipBehavior: Clip.antiAlias,
-                child: Column(
-                  children: [
-                    Container(
-                      color: const Color(0xFFF8FAFC),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 14),
-                      child: Row(
-                        children: const [
-                          Expanded(flex: 5, child: _HeaderCell('User')),
-                          Expanded(flex: 3, child: _HeaderCell('Role')),
-                          Expanded(flex: 3, child: _HeaderCell('Email')),
-                        ],
-                      ),
-                    ),
-                    const Divider(height: 1, color: AppColors.border),
-                    if (users.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(40),
-                        child: Text('No users found',
-                            style: TextStyle(color: AppColors.textMuted)),
+                child: isMobile
+                    ? SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 500),
+                          child: _buildTableContent(users),
+                        ),
                       )
-                    else
-                      ...users.map((AppUser user) => _buildUserRow(user)),
-                  ],
-                ),
+                    : _buildTableContent(users),
               ),
           ],
         ),
       ),
+    );
+      },
+    );
+  }
+
+  Widget _buildTableContent(List<AppUser> users) {
+    return Column(
+      children: [
+        Container(
+          color: const Color(0xFFF8FAFC),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            children: const [
+              Expanded(flex: 5, child: _HeaderCell('User')),
+              Expanded(flex: 3, child: _HeaderCell('Role')),
+              Expanded(flex: 3, child: _HeaderCell('Email')),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.border),
+        if (users.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(40),
+            child: Text('No users found',
+                style: TextStyle(color: AppColors.textMuted)),
+          )
+        else
+          ...users.map((AppUser user) => _buildUserRow(user)),
+      ],
     );
   }
 
@@ -409,20 +489,24 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             ),
           ),
           const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: AppTextStyles.caption),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  color: color,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppTextStyles.caption,
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

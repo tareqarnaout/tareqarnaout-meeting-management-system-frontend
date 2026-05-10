@@ -22,6 +22,8 @@ class Meeting {
   final String? signatoryName;
   final String? signatoryTitle;
   final int signatureNeededCount;
+  final String? requestedEdit;
+  final int signatureStatus;
 
   Meeting({
     this.id,
@@ -45,6 +47,8 @@ class Meeting {
     this.signatoryName,
     this.signatoryTitle,
     this.signatureNeededCount = 0,
+    this.requestedEdit,
+    this.signatureStatus = 1,
   });
 
   factory Meeting.fromJson(Map<String, dynamic> json) {
@@ -83,6 +87,8 @@ class Meeting {
       signatoryName: json['signatoryName'] as String?,
       signatoryTitle: json['signatoryTitle'] as String?,
       signatureNeededCount: json['signatureNeededCount'] as int? ?? 0,
+      requestedEdit: json['requestedEdit'] as String?,
+      signatureStatus: json['signatureStatus'] as int? ?? 1,
     );
   }
 

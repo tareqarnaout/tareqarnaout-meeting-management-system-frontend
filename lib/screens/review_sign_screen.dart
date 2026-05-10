@@ -144,6 +144,7 @@ class _MeetingPendingCard extends StatelessWidget {
     final String formattedDate =
         DateFormat('MMM dd, yyyy').format(meeting.meetingDate);
     final bool isDraft = meeting.status == MeetingStatus.draft;
+    final bool hasSigned = meeting.signatureStatus == MeetingStatus.finalized;
 
     return InkWell(
       onTap: onTap,
@@ -157,11 +158,19 @@ class _MeetingPendingCard extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: AppColors.statusPending.withValues(alpha: 0.1),
+                color: (hasSigned
+                        ? AppColors.textMuted
+                        : AppColors.statusPending)
+                    .withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.draw_outlined,
-                  size: 20, color: AppColors.statusPending),
+              child: Icon(
+                hasSigned ? Icons.check_circle_outline : Icons.draw_outlined,
+                size: 20,
+                color: hasSigned
+                    ? AppColors.textMuted
+                    : AppColors.statusPending,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -203,10 +212,14 @@ class _MeetingPendingCard extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildTag('Sign', AppColors.statusPending),
-                if (isDraft) ...[
-                  const SizedBox(width: 8),
-                  _buildTag('Approve', AppColors.statusApproved),
+                if (hasSigned)
+                  _buildTag('تم التوقيع', AppColors.textMuted)
+                else ...[
+                  _buildTag('Sign', AppColors.statusPending),
+                  if (isDraft) ...[
+                    const SizedBox(width: 8),
+                    _buildTag('Approve', AppColors.statusApproved),
+                  ],
                 ],
               ],
             ),

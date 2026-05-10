@@ -590,7 +590,6 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
               recordingState: _recordingState,
               onRecordToggle: _handleRecordToggle,
               onStop: _stopRecording,
-              onSendToSecretary: _isSending ? null : _sendNotes,
               onSaveToArchive: _saveToArchive,
             ),
             SizedBox(height: sectionGap),
@@ -699,7 +698,6 @@ class _MinuteHeader extends StatelessWidget {
   final RecordingState recordingState;
   final VoidCallback onRecordToggle;
   final VoidCallback onStop;
-  final VoidCallback? onSendToSecretary;
   final VoidCallback onSaveToArchive;
 
   const _MinuteHeader({
@@ -712,7 +710,6 @@ class _MinuteHeader extends StatelessWidget {
     required this.onRecordToggle,
     required this.onStop,
     required this.onSaveToArchive,
-    this.onSendToSecretary,
   });
 
   @override
@@ -722,6 +719,8 @@ class _MinuteHeader extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
+        final bool isWide = constraints.maxWidth >= 700;
+
         final Widget metaRow = Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -745,62 +744,57 @@ class _MinuteHeader extends StatelessWidget {
           ],
         );
 
-        final Widget actions = SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              MinuteTag(
-                label: recordingLabel,
-                icon: recordingIcon,
-                backgroundColor: AppColors.surfaceMuted,
-                textColor: AppColors.textSecondary,
-              ),
-              const SizedBox(width: 10),
-              MinuteActionButton(
-                label: recordLabel,
-                icon: recordIcon,
-                onPressed: onRecordToggle,
-              ),
-              const SizedBox(width: 10),
-              MinuteActionButton(
-                label: 'Stop',
-                icon: Icons.stop_circle_outlined,
-                onPressed: isIdle ? null : onStop,
-              ),
-              const SizedBox(width: 10),
-              MinuteActionButton(
-                label: 'Send to Secretary',
-                icon: Icons.send_outlined,
-                onPressed: onSendToSecretary,
-                isPrimary: true,
-              ),
-              const SizedBox(width: 10),
-              MinuteActionButton(
-                label: 'Save to Archive',
-                icon: Icons.archive_outlined,
-                onPressed: onSaveToArchive,
-              ),
-            ],
-          ),
+        final Widget actions = Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: isWide ? WrapAlignment.end : WrapAlignment.start,
+          children: [
+            MinuteTag(
+              label: recordingLabel,
+              icon: recordingIcon,
+              backgroundColor: AppColors.surfaceMuted,
+              textColor: AppColors.textSecondary,
+            ),
+            MinuteActionButton(
+              label: recordLabel,
+              icon: recordIcon,
+              onPressed: onRecordToggle,
+            ),
+            MinuteActionButton(
+              label: 'Stop',
+              icon: Icons.stop_circle_outlined,
+              onPressed: isIdle ? null : onStop,
+            ),
+            MinuteActionButton(
+              label: 'Save to Archive',
+              icon: Icons.archive_outlined,
+              onPressed: onSaveToArchive,
+            ),
+          ],
         );
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                metaRow,
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: actions,
+            if (isWide)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  metaRow,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: actions,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              )
+            else ...[
+              metaRow,
+              const SizedBox(height: 10),
+              actions,
+            ],
             const SizedBox(height: 10),
             Text(
               'Faculty Council Meeting - Term 2',
@@ -993,12 +987,32 @@ class _CenterColumn extends StatelessWidget {
                 backgroundColor: AppColors.tagGreenBg,
                 textColor: AppColors.primaryTeal,
               ),
-              MinuteTag(
-                label: sttAvailable
-                    ? (sttListening ? 'Arabic STT On' : 'Arabic STT Off')
-                    : 'Arabic STT Unavailable',
-                backgroundColor: AppColors.surfaceMuted,
-                textColor: AppColors.textSecondary,
+              GestureDetector(
+                onTap: sttAvailable
+                    ? null
+                    : () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Install an Arabic language pack in your device settings '
+                              '(Settings > System > Languages & Input > Speech) to enable Arabic speech-to-text.',
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                            duration: Duration(seconds: 5),
+                          ),
+                        );
+                      },
+                child: MinuteTag(
+                  label: sttAvailable
+                      ? (sttListening ? 'Arabic STT On' : 'Arabic STT Off')
+                      : 'Arabic STT Unavailable',
+                  backgroundColor: sttAvailable
+                      ? AppColors.surfaceMuted
+                      : AppColors.statusDraft.withValues(alpha: 0.1),
+                  textColor: sttAvailable
+                      ? AppColors.textSecondary
+                      : AppColors.statusDraft,
+                ),
               ),
             ],
           ),
@@ -1132,7 +1146,7 @@ class _RightColumn extends StatelessWidget {
               Text('القسم', style: AppTextStyles.caption),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: selectedDepartment,
+                initialValue: selectedDepartment,
                 isExpanded: true,
                 items: departments
                     .map((String d) => DropdownMenuItem<String>(
@@ -1163,7 +1177,7 @@ class _RightColumn extends StatelessWidget {
               Text('نوع المجلس', style: AppTextStyles.caption),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: selectedMeetingType,
+                initialValue: selectedMeetingType,
                 isExpanded: true,
                 items: meetingTypes
                     .map((String t) => DropdownMenuItem<String>(

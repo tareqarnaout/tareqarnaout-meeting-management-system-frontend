@@ -3,6 +3,7 @@ import '../constants/app_theme.dart';
 
 class GraphNodeData {
   final String id;
+  final int? meetingId;
   final String title;
   final String? date;
   final String? type;
@@ -14,6 +15,7 @@ class GraphNodeData {
 
   GraphNodeData({
     required this.id,
+    this.meetingId,
     required this.title,
     this.date,
     this.type,

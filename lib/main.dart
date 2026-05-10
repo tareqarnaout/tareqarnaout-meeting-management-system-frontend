@@ -131,8 +131,13 @@ final GoRouter _router = GoRouter(
         ),
         GoRoute(
           path: '/create',
-          pageBuilder: (BuildContext context, GoRouterState state) =>
-              _fadeSlide(state: state, child: const CreateMeetingScreen()),
+          pageBuilder: (BuildContext context, GoRouterState state) {
+            final Meeting? editMeeting = state.extra as Meeting?;
+            return _fadeSlide(
+              state: state,
+              child: CreateMeetingScreen(editMeeting: editMeeting),
+            );
+          },
         ),
         GoRoute(
           path: '/review',

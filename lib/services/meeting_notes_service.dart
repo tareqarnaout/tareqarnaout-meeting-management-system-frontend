@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../models/meeting.dart';
 import '../models/meeting_note.dart';
 import '../models/minute_taker_models.dart';
 import 'api_service.dart';
@@ -46,6 +47,35 @@ class MeetingNotesService {
     }
   }
 
+  Future<MeetingData> getMeetingData() async {
+    try {
+      final http.Response response = await _api.get('/meetings/getMeetingData');
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data =
+            jsonDecode(response.body) as Map<String, dynamic>;
+        final List<MeetingNote> notes =
+            (data['meetingNotes'] as List<dynamic>?)
+                    ?.map((dynamic e) =>
+                        MeetingNote.fromJson(e as Map<String, dynamic>))
+                    .toList() ??
+                <MeetingNote>[];
+        final List<Meeting> editRequests =
+            (data['meetingsController'] as List<dynamic>?)
+                    ?.map((dynamic e) =>
+                        Meeting.fromJson(e as Map<String, dynamic>))
+                    .toList() ??
+                <Meeting>[];
+        return MeetingData(notes: notes, editRequests: editRequests);
+      }
+      debugPrint(
+          '[MeetingNotesService] Failed to load meeting data: ${response.statusCode}');
+      return MeetingData(notes: <MeetingNote>[], editRequests: <Meeting>[]);
+    } catch (e) {
+      debugPrint('[MeetingNotesService] Error loading meeting data: $e');
+      return MeetingData(notes: <MeetingNote>[], editRequests: <Meeting>[]);
+    }
+  }
+
   Future<bool> createNote({
     required String notes,
     required List<int> attendeeIds,
@@ -66,4 +96,11 @@ class MeetingNotesService {
       return false;
     }
   }
+}
+
+class MeetingData {
+  final List<MeetingNote> notes;
+  final List<Meeting> editRequests;
+
+  const MeetingData({required this.notes, required this.editRequests});
 }

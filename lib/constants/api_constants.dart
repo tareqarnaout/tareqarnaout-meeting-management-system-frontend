@@ -1,5 +1,5 @@
 class ApiConstants {
-  static const String baseUrl = 'http://localhost:5065/api';
+  static const String baseUrl = 'https/model ://post-meeting-hheug7c7hqabhmbz.canadacentral-01.azurewebsites.net/api';
   // http://localhost:5065
 // post-meeting-hheug7c7hqabhmbz.canadacentral-01.azurewebsites.net
 }
@@ -8,6 +8,7 @@ class MeetingStatus {
   static const int draft = 0;
   static const int pendingApproval = 1;
   static const int finalized = 2;
+  static const int editRequest = 3;
 
   static String label(int status) {
     switch (status) {
@@ -17,6 +18,8 @@ class MeetingStatus {
         return 'Pending Approval';
       case finalized:
         return 'Finalized';
+      case editRequest:
+        return 'Edit Requested';
       default:
         return 'Unknown';
     }

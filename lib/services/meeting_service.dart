@@ -95,7 +95,7 @@ class MeetingService {
     }
 
     try {
-      final response = await _api.get('/meetings/$id');
+      final response = await _api.get('/meetings/getMeeting?meetingId=$id');
       if (response.statusCode == 200) {
         return Meeting.fromJson(
             jsonDecode(response.body) as Map<String, dynamic>);
@@ -106,9 +106,12 @@ class MeetingService {
     }
   }
 
-  Future<bool> createMeeting(Meeting meeting) async {
+  Future<bool> createMeeting(Meeting meeting, {int? editedMeetingId}) async {
     try {
-      final response = await _api.post('/meetings/', meeting.toJson());
+      final String endpoint = editedMeetingId != null
+          ? '/meetings/?editedMeetingID=$editedMeetingId'
+          : '/meetings/';
+      final response = await _api.post(endpoint, meeting.toJson());
       final bool ok =
           response.statusCode == 200 || response.statusCode == 201;
       if (ok) invalidateCache();
@@ -122,6 +125,19 @@ class MeetingService {
   Future<int> verifySignature() async {
     try {
       final response = await _api.post('/meetings/signature/verify', {});
+      if (response.statusCode == 200) invalidateCache();
+      return response.statusCode;
+    } catch (e) {
+      return 500;
+    }
+  }
+
+  Future<int> requestEdit(int meetingId, String note) async {
+    try {
+      final response = await _api.post('/meetings/editMeeting', {
+        'meetingId': meetingId,
+        'note': note,
+      });
       if (response.statusCode == 200) invalidateCache();
       return response.statusCode;
     } catch (e) {

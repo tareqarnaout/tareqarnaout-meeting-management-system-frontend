@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../constants/app_theme.dart';
 import '../models/meeting.dart';
 import '../services/meeting_service.dart';
+import '../widgets/document_preview.dart';
 import '../widgets/graph_node.dart';
 
 class DecisionGraphScreen extends StatefulWidget {
@@ -55,13 +56,14 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
     }
 
     final results = await Future.wait([
-      _meetingService.getMeeting(widget.meetingId!),
+      _meetingService.getMeetings(),
       _meetingService.getMeetingRelationships(widget.meetingId!),
     ]);
 
     if (!mounted) return;
 
-    final Meeting? focused = results[0] as Meeting?;
+    final List<Meeting> allMeetings = results[0] as List<Meeting>;
+    final Meeting? focused = allMeetings.where((Meeting m) => m.id == widget.meetingId).firstOrNull;
     final List<MeetingRelationship> relationships =
         results[1] as List<MeetingRelationship>;
 
@@ -87,6 +89,7 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
     _nodes = [
       GraphNodeData(
         id: centerId,
+        meetingId: focused?.id,
         title: centerTitle,
         date: centerDate,
         status: focused?.status ?? 0,
@@ -96,9 +99,10 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
       ...relationships.map((MeetingRelationship r) {
         return GraphNodeData(
           id: 'r_${r.meetingId}',
+          meetingId: r.meetingId,
           title: r.title,
           date: DateFormat('MMM d, yyyy').format(r.meetingDate),
-          status: 2, // relationships are from finalized meetings
+          status: 2,
           position: Offset(
             100 + rng.nextDouble() * 500,
             60 + rng.nextDouble() * 350,
@@ -178,6 +182,117 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
       if (n.id == id) return n;
     }
     return null;
+  }
+
+  Future<void> _showDocumentPreview(int meetingId) async {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(24),
+          child: FutureBuilder<Meeting?>(
+            future: _meetingService.getMeeting(meetingId),
+            builder: (BuildContext context, AsyncSnapshot<Meeting?> snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return Container(
+                  width: 400,
+                  height: 300,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final Meeting? meeting = snapshot.data;
+              if (meeting == null) {
+                return Container(
+                  width: 400,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(
+                    child: Text('Could not load document.',
+                        style: TextStyle(color: AppColors.textSecondary)),
+                  ),
+                );
+              }
+
+              final String meetingDateStr =
+                  '${meeting.meetingDate.year}/${meeting.meetingDate.month}/${meeting.meetingDate.day}';
+
+              final DocumentPreviewData previewData = DocumentPreviewData(
+                meetingTitle: meeting.title,
+                councilType: meeting.councilType ?? 'مجلس القسم',
+                sessionNumber: meeting.sessionNumber ?? '',
+                decisionNumber: meeting.decisionNumber ?? '',
+                meetingDate: meetingDateStr,
+                decisionText: meeting.meetingContent ?? '',
+                signatoryName: meeting.signatoryName ?? '',
+                signatoryTitle: meeting.signatoryTitle ?? '',
+              );
+
+              return Container(
+                constraints: const BoxConstraints(maxWidth: 620, maxHeight: 800),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8EAF0),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(12)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.description_outlined,
+                              size: 18, color: AppColors.textSecondary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              meeting.title,
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            icon: const Icon(Icons.close, size: 18),
+                            splashRadius: 16,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Center(
+                          child: DocumentPreview(data: previewData),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 
   void _onSearch(String query) {
@@ -308,8 +423,8 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                                       fontWeight: FontWeight.w600)),
                               TextSpan(
                                   text: isMobile
-                                      ? 'Drag nodes to rearrange, pinch to zoom.'
-                                      : 'The highlighted center node is the selected meeting. '
+                                      ? 'Drag nodes to rearrange, pinch to zoom. Double-tap a node to view its document.'
+                                      : 'Double-click a node to view its document. '
                                           'Drag nodes to rearrange, scroll to zoom, and use filters to focus on specific relationship types.'),
                             ],
                           ),
@@ -491,6 +606,12 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                           left: pos.dx,
                           top: pos.dy,
                           child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onDoubleTap: () {
+                              if (node.meetingId != null) {
+                                _showDocumentPreview(node.meetingId!);
+                              }
+                            },
                             onPanStart: (_) {
                               setState(() {
                                 _draggingNodeId = node.id;

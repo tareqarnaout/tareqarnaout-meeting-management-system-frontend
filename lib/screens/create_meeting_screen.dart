@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
 import '../constants/app_theme.dart';
 import '../models/meeting.dart';
@@ -11,7 +13,9 @@ import '../widgets/document_preview.dart';
 import '../widgets/wave_scroll_button.dart';
 
 class CreateMeetingScreen extends StatefulWidget {
-  const CreateMeetingScreen({super.key});
+  final Meeting? editMeeting;
+
+  const CreateMeetingScreen({super.key, this.editMeeting});
 
   @override
   State<CreateMeetingScreen> createState() => _CreateMeetingScreenState();
@@ -21,7 +25,8 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
   final TextEditingController _meetingTitleController = TextEditingController();
   final TextEditingController _referenceNumberController =
       TextEditingController();
-  final TextEditingController _issueDateController = TextEditingController();
+  final TextEditingController _issueDateController =
+      TextEditingController(text: DateFormat('MM/dd/yyyy').format(DateTime.now()));
   final TextEditingController _sessionNumberController =
       TextEditingController();
   final TextEditingController _academicYearController =
@@ -41,7 +46,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
   final MeetingService _meetingService = MeetingService();
 
   String _selectedCouncilType = 'مجلس القسم';
-  DateTime? _selectedIssueDate;
+  final DateTime _selectedIssueDate = DateTime.now();
   DateTime? _selectedMeetingDate = DateTime.now();
   bool _isSubmitting = false;
 
@@ -66,10 +71,90 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
   final TextEditingController _signatorySearchController =
       TextEditingController();
 
+  static const String _draftKey = 'meeting_draft';
+
   @override
   void initState() {
     super.initState();
     _fetchUsers();
+    if (widget.editMeeting != null) {
+      _prefillFromMeeting();
+    } else {
+      _loadDraft();
+    }
+  }
+
+  void _prefillFromMeeting() {
+    final Meeting? m = widget.editMeeting;
+    if (m == null) return;
+    _meetingTitleController.text = m.title;
+    _decisionTextController.text = m.meetingContent ?? '';
+    _sessionNumberController.text = m.sessionNumber ?? '';
+    _decisionNumberController.text = m.decisionNumber ?? '';
+    if (m.councilType != null) _selectedCouncilType = m.councilType!;
+    _selectedMeetingDate = m.meetingDate;
+    _meetingDateController.text = DateFormat('MM/dd/yyyy').format(m.meetingDate);
+    if (m.signatoryName != null) _signatoryNameController.text = m.signatoryName!;
+    if (m.signatoryTitle != null) _signatoryTitleController.text = m.signatoryTitle!;
+  }
+
+  Future<void> _saveDraft() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final Map<String, dynamic> draft = {
+      'title': _meetingTitleController.text,
+      'referenceNumber': _referenceNumberController.text,
+      'issueDate': _issueDateController.text,
+      'sessionNumber': _sessionNumberController.text,
+      'academicYear': _academicYearController.text,
+      'decisionNumber': _decisionNumberController.text,
+      'meetingDate': _meetingDateController.text,
+      'decisionText': _decisionTextController.text,
+      'councilType': _selectedCouncilType,
+      'signatoryName': _signatoryNameController.text,
+      'signatoryTitle': _signatoryTitleController.text,
+      'copyToList': _copyToList,
+    };
+    await prefs.setString(_draftKey, jsonEncode(draft));
+  }
+
+  Future<void> _loadDraft() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? raw = prefs.getString(_draftKey);
+    if (raw == null) return;
+    try {
+      final Map<String, dynamic> draft =
+          jsonDecode(raw) as Map<String, dynamic>;
+      if (!mounted) return;
+      setState(() {
+        _meetingTitleController.text = draft['title'] as String? ?? '';
+        _referenceNumberController.text = draft['referenceNumber'] as String? ?? '';
+        _sessionNumberController.text = draft['sessionNumber'] as String? ?? '';
+        _academicYearController.text = draft['academicYear'] as String? ?? '2025/2026';
+        _decisionNumberController.text = draft['decisionNumber'] as String? ?? '';
+        _meetingDateController.text = draft['meetingDate'] as String? ?? '';
+        _decisionTextController.text = draft['decisionText'] as String? ?? '';
+        _selectedCouncilType = draft['councilType'] as String? ?? 'مجلس القسم';
+        _signatoryNameController.text = draft['signatoryName'] as String? ?? 'أ.د. عبدالله';
+        _signatoryTitleController.text = draft['signatoryTitle'] as String? ?? 'رئيس القسم';
+        final List<dynamic>? copyTo = draft['copyToList'] as List<dynamic>?;
+        if (copyTo != null) {
+          _copyToList
+            ..clear()
+            ..addAll(copyTo.cast<String>());
+        }
+        if (_meetingDateController.text.isNotEmpty) {
+          try {
+            _selectedMeetingDate =
+                DateFormat('MM/dd/yyyy').parse(_meetingDateController.text);
+          } catch (_) {}
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _clearDraft() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_draftKey);
   }
 
   Future<void> _fetchUsers() async {
@@ -206,20 +291,6 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     super.dispose();
   }
 
-  Future<void> _pickIssueDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedIssueDate = picked;
-        _issueDateController.text = DateFormat('MM/dd/yyyy').format(picked);
-      });
-    }
-  }
 
   Future<void> _pickMeetingDate() async {
     final DateTime? picked = await showDatePicker(
@@ -236,6 +307,75 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     }
   }
 
+  Future<void> _confirmAndSend() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('إرسال الاجتماع للتوقيع',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: const Text(
+          'هل أنت متأكد من إرسال هذا الاجتماع للتوقيع؟ لن تتمكن من تعديله بعد الإرسال.',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryTeal,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('إرسال'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _submit(MeetingStatus.pendingApproval);
+    }
+  }
+
+  Future<void> _confirmAndSaveDraft() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('حفظ المسودة',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: const Text(
+          'هل تريد حفظ هذا الاجتماع كمسودة محلية؟',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryTeal,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _saveDraft();
+      if (mounted) _showSnack('تم حفظ المسودة محلياً.');
+    }
+  }
+
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
@@ -245,7 +385,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
   Future<void> _submit(int status) async {
     if (_isSubmitting) return;
 
-    if (_selectedMeetingDate == null && _selectedIssueDate == null) {
+    if (_selectedMeetingDate == null) {
       _showSnack('يرجى تحديد تاريخ الاجتماع.');
       return;
     }
@@ -274,7 +414,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
 
     final Meeting meeting = Meeting(
       title: meetingTitle,
-      meetingDate: _selectedMeetingDate ?? _selectedIssueDate ?? DateTime.now(),
+      meetingDate: _selectedMeetingDate ?? DateTime.now(),
       meetingContent: _decisionTextController.text.trim(),
       status: status,
       requiredSignatures: _selectedSignatories
@@ -296,15 +436,17 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       signatoryTitle: _signatoryTitleController.text.trim(),
     );
 
-    final bool ok = await _meetingService.createMeeting(meeting);
+    final bool ok = await _meetingService.createMeeting(
+      meeting,
+      editedMeetingId: widget.editMeeting?.id,
+    );
 
     if (!mounted) return;
     setState(() => _isSubmitting = false);
 
     if (ok) {
-      _showSnack(status == MeetingStatus.draft
-          ? 'تم حفظ المسودة.'
-          : 'تم إرسال الملخص للتوقيع.');
+      await _clearDraft();
+      _showSnack('تم إرسال الملخص للتوقيع.');
       context.go('/');
     } else {
       _showSnack('فشل إنشاء الاجتماع. يرجى المحاولة مرة أخرى.');
@@ -374,27 +516,13 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
             ),
           ),
           const SizedBox(width: 12),
-          OutlinedButton.icon(
-            onPressed: _isSubmitting ? null : () => _submit(MeetingStatus.draft),
-            icon: const Icon(Icons.save_outlined, size: 16),
-            label: const Text('حفظ مسودة'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.border),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-          ),
-          const SizedBox(width: 10),
           WaveScrollButton(
-            text: 'إرسال',
+            text: 'Send',
             icon: Icons.send,
             isLoading: _isSubmitting,
             onPressed: _isSubmitting
                 ? null
-                : () => _submit(MeetingStatus.pendingApproval),
+                : () => _confirmAndSend(),
             backgroundColor: AppColors.primaryTeal,
             padding:
                 const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -449,12 +577,12 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
                         child: TextField(
                           controller: _issueDateController,
                           readOnly: true,
-                          onTap: _pickIssueDate,
+                          enabled: false,
                           decoration: AppDecorations.inputDecoration(
                             '',
                             hint: 'mm / dd / yyyy',
                             suffixIcon: const Icon(
-                                Icons.calendar_today_outlined,
+                                Icons.lock_outline,
                                 size: 16,
                                 color: AppColors.textMuted),
                           ).copyWith(labelText: null),
@@ -1209,8 +1337,8 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
               ),
               const SizedBox(width: 10),
               WaveScrollButton(
-                text: 'محفظة القرارات',
-                onPressed: _isSubmitting ? null : () => _submit(MeetingStatus.draft),
+                text: 'Save Draft',
+                onPressed: _isSubmitting ? null : () => _confirmAndSaveDraft(),
                 backgroundColor: AppColors.primaryTeal,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
@@ -1223,11 +1351,8 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
   }
 
   DocumentPreviewData _buildPreviewData() {
-    String issueDateFormatted = '';
-    if (_selectedIssueDate != null) {
-      issueDateFormatted =
-          '${_selectedIssueDate!.day}/${_selectedIssueDate!.month}/${_selectedIssueDate!.year}';
-    }
+    final String issueDateFormatted =
+        '${_selectedIssueDate.day}/${_selectedIssueDate.month}/${_selectedIssueDate.year}';
     String meetingDateFormatted = '';
     if (_selectedMeetingDate != null) {
       meetingDateFormatted =

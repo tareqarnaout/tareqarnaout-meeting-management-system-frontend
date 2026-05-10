@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../constants/api_constants.dart';
 import '../constants/app_theme.dart';
 import '../models/meeting.dart';
 import '../services/meeting_service.dart';
@@ -23,6 +24,7 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
   Meeting? _meeting;
   bool _isLoading = true;
   bool _isSigning = false;
+  bool _isRequestingEdit = false;
 
   @override
   void initState() {
@@ -243,6 +245,8 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
     final int totalCount = signatories.length;
     final double progress =
         totalCount > 0 ? signedCount / totalCount : 0;
+    final bool hasSigned =
+        _meeting!.signatureStatus == MeetingStatus.finalized;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,45 +267,62 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
           ],
         ),
         const SizedBox(height: 4),
-        const Text(
-          'راجع الوثيقة ثم وقع أو اطلب تعديلاً',
-          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        Text(
+          hasSigned
+              ? 'لقد وقّعت على هذه الوثيقة'
+              : 'راجع الوثيقة ثم وقع أو اطلب تعديلاً',
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 16),
 
-        // Action required banner
+        // Status banner
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFF2E7D9E).withValues(alpha: 0.08),
+            color: hasSigned
+                ? AppColors.statusApproved.withValues(alpha: 0.08)
+                : const Color(0xFF2E7D9E).withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-                color: const Color(0xFF2E7D9E).withValues(alpha: 0.25)),
+                color: hasSigned
+                    ? AppColors.statusApproved.withValues(alpha: 0.3)
+                    : const Color(0xFF2E7D9E).withValues(alpha: 0.25)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.error_outline,
-                      size: 16, color: AppColors.primaryTeal),
+                  Icon(
+                    hasSigned
+                        ? Icons.check_circle_outline
+                        : Icons.error_outline,
+                    size: 16,
+                    color: hasSigned
+                        ? AppColors.statusApproved
+                        : AppColors.primaryTeal,
+                  ),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'إجراء مطلوب: توقيعك مطلوب',
+                      hasSigned ? 'تم التوقيع' : 'إجراء مطلوب: توقيعك مطلوب',
                       style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.primaryTeal),
+                          color: hasSigned
+                              ? AppColors.statusApproved
+                              : AppColors.primaryTeal),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 4),
-              const Text(
-                'يرجى مراجعة الوثيقة والتوقيع الرقمي للموافقة.',
+              Text(
+                hasSigned
+                    ? 'وقّعت رقمياً على هذه الوثيقة.'
+                    : 'يرجى مراجعة الوثيقة والتوقيع الرقمي للموافقة.',
                 style:
-                    TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -393,28 +414,54 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
                       fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary)),
               const SizedBox(height: 16),
-              WaveScrollButton(
-                text: 'توقيع رقمي والموافقة',
-                icon: Icons.check_circle_outline,
-                onPressed: _isSigning ? null : () => _showSignDialog(),
-                isLoading: _isSigning,
-                backgroundColor: AppColors.statusApproved,
-                expand: true,
-                padding: const EdgeInsets.symmetric(
-                    vertical: 14, horizontal: 16),
-              ),
-              const SizedBox(height: 10),
-              WaveScrollButton(
-                text: 'طلب تعديل',
-                icon: Icons.cancel_outlined,
-                onPressed: () {},
-                outlined: true,
-                expand: true,
-                foregroundColor: AppColors.statusDraft,
-                borderColor: AppColors.statusDraft,
-                padding: const EdgeInsets.symmetric(
-                    vertical: 14, horizontal: 16),
-              ),
+              if (hasSigned)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                    label: const Text('تم التوقيع',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.textMuted.withValues(alpha: 0.15),
+                      foregroundColor: AppColors.textMuted,
+                      disabledBackgroundColor:
+                          AppColors.textMuted.withValues(alpha: 0.15),
+                      disabledForegroundColor: AppColors.textMuted,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                )
+              else ...[
+                WaveScrollButton(
+                  text: 'توقيع رقمي والموافقة',
+                  icon: Icons.check_circle_outline,
+                  onPressed: _isSigning ? null : () => _showSignDialog(),
+                  isLoading: _isSigning,
+                  backgroundColor: AppColors.statusApproved,
+                  expand: true,
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 14, horizontal: 16),
+                ),
+                const SizedBox(height: 10),
+                WaveScrollButton(
+                  text: 'طلب تعديل',
+                  icon: Icons.cancel_outlined,
+                  onPressed:
+                      _isRequestingEdit ? null : () => _showEditRequestDialog(),
+                  isLoading: _isRequestingEdit,
+                  outlined: true,
+                  expand: true,
+                  foregroundColor: AppColors.statusDraft,
+                  borderColor: AppColors.statusDraft,
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 14, horizontal: 16),
+                ),
+              ],
             ],
           ),
         ),
@@ -494,6 +541,91 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _requestEdit(String note) async {
+    setState(() => _isRequestingEdit = true);
+    final int statusCode = await _meetingService.requestEdit(_meeting!.id!, note);
+    if (!mounted) return;
+    setState(() => _isRequestingEdit = false);
+
+    if (statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم إرسال طلب التعديل بنجاح'),
+          backgroundColor: AppColors.statusApproved,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      context.go('/review');
+    } else if (statusCode == 401) {
+      context.go('/login');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('حدث خطأ. يرجى المحاولة مرة أخرى.'),
+          backgroundColor: AppColors.statusDraft,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _showEditRequestDialog() {
+    final TextEditingController noteController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          title: const Text('طلب تعديل',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('يرجى كتابة ملاحظة توضح التعديل المطلوب.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: noteController,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: 'اكتب ملاحظتك هنا...',
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('إلغاء'),
+            ),
+            WaveScrollButton(
+              text: 'إرسال طلب التعديل',
+              backgroundColor: AppColors.statusDraft,
+              onPressed: () {
+                final String note = noteController.text.trim();
+                if (note.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('يرجى كتابة ملاحظة قبل الإرسال'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.of(ctx).pop();
+                _requestEdit(note);
+              },
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 10),
+            ),
+          ],
+        );
+      },
     );
   }
 

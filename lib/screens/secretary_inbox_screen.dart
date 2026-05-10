@@ -2,10 +2,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../constants/app_theme.dart';
+import '../models/meeting.dart';
 import '../models/meeting_note.dart';
 import '../services/meeting_notes_service.dart';
+import '../widgets/document_preview.dart';
 
 class SecretaryInboxScreen extends StatefulWidget {
   const SecretaryInboxScreen({super.key});
@@ -22,14 +25,17 @@ class _SecretaryInboxScreenState extends State<SecretaryInboxScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   List<MeetingNote> _notes = <MeetingNote>[];
+  List<Meeting> _editRequests = <Meeting>[];
   MeetingNote? _selectedNote;
+  Meeting? _selectedEditRequest;
   bool _isLoading = true;
   String _searchQuery = '';
+  int _activeTab = 0; // 0 = notes, 1 = edit requests
 
   @override
   void initState() {
     super.initState();
-    _loadNotes();
+    _loadData();
   }
 
   @override
@@ -38,15 +44,19 @@ class _SecretaryInboxScreenState extends State<SecretaryInboxScreen> {
     super.dispose();
   }
 
-  Future<void> _loadNotes() async {
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final List<MeetingNote> notes = await _service.getAllNotes();
+    final MeetingData data = await _service.getMeetingData();
     if (!mounted) return;
     setState(() {
-      _notes = notes;
+      _notes = data.notes;
+      _editRequests = data.editRequests;
       _isLoading = false;
-      if (notes.isNotEmpty && _selectedNote == null) {
-        _selectedNote = notes.first;
+      if (_notes.isNotEmpty && _selectedNote == null) {
+        _selectedNote = _notes.first;
+      }
+      if (_editRequests.isNotEmpty && _selectedEditRequest == null) {
+        _selectedEditRequest = _editRequests.first;
       }
     });
   }
@@ -61,6 +71,15 @@ class _SecretaryInboxScreenState extends State<SecretaryInboxScreen> {
             (content.titleAr?.toLowerCase().contains(q) ?? false);
       }
       return note.notes?.toLowerCase().contains(q) ?? false;
+    }).toList();
+  }
+
+  List<Meeting> get _filteredEditRequests {
+    if (_searchQuery.isEmpty) return _editRequests;
+    final String q = _searchQuery.toLowerCase();
+    return _editRequests.where((Meeting m) {
+      return m.title.toLowerCase().contains(q) ||
+          (m.requestedEdit?.toLowerCase().contains(q) ?? false);
     }).toList();
   }
 
@@ -80,96 +99,10 @@ class _SecretaryInboxScreenState extends State<SecretaryInboxScreen> {
                 child: CircularProgressIndicator(
                     color: AppColors.primaryTeal)),
           );
-        } else if (_notes.isEmpty) {
-          body = Expanded(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceMuted,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(Icons.inbox_outlined,
-                        size: 32, color: AppColors.primaryTeal),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('No meeting notes yet',
-                      style: AppTextStyles.heading3),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Notes from minute takers will appear here.',
-                    style: AppTextStyles.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-          );
-        } else if (isDesktop) {
-          body = Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 380,
-                  child: _NoteListPanel(
-                    notes: _filteredNotes,
-                    selectedNote: _selectedNote,
-                    searchController: _searchController,
-                    onSearch: (String q) =>
-                        setState(() => _searchQuery = q),
-                    onSelectNote: (MeetingNote n) =>
-                        setState(() => _selectedNote = n),
-                  ),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  flex: 3,
-                  child: _selectedNote != null
-                      ? _DocumentPanel(note: _selectedNote!)
-                      : const SizedBox.shrink(),
-                ),
-                const SizedBox(width: 20),
-                SizedBox(
-                  width: 300,
-                  child: _selectedNote != null
-                      ? _MetadataPanel(note: _selectedNote!)
-                      : const SizedBox.shrink(),
-                ),
-              ],
-            ),
-          );
+        } else if (_activeTab == 0) {
+          body = _buildNotesTab(isDesktop);
         } else {
-          body = Expanded(
-            child: ScrollConfiguration(
-              behavior: const _InboxScrollBehavior(),
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    _NoteListPanel(
-                      notes: _filteredNotes,
-                      selectedNote: _selectedNote,
-                      searchController: _searchController,
-                      onSearch: (String q) =>
-                          setState(() => _searchQuery = q),
-                      onSelectNote: (MeetingNote n) =>
-                          setState(() => _selectedNote = n),
-                      isMobile: true,
-                    ),
-                    if (_selectedNote != null) ...[
-                      const SizedBox(height: 20),
-                      _DocumentPanel(note: _selectedNote!),
-                      const SizedBox(height: 20),
-                      _MetadataPanel(note: _selectedNote!),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          );
+          body = _buildEditRequestsTab(isDesktop);
         }
 
         Widget content = Column(
@@ -177,6 +110,15 @@ class _SecretaryInboxScreenState extends State<SecretaryInboxScreen> {
           children: [
             _InboxHeader(
               noteCount: _notes.length,
+              editRequestCount: _editRequests.length,
+              activeTab: _activeTab,
+              onTabChanged: (int tab) {
+                setState(() {
+                  _activeTab = tab;
+                  _searchQuery = '';
+                  _searchController.clear();
+                });
+              },
             ),
             const SizedBox(height: 20),
             body,
@@ -203,15 +145,223 @@ class _SecretaryInboxScreenState extends State<SecretaryInboxScreen> {
       },
     );
   }
+
+  Widget _buildNotesTab(bool isDesktop) {
+    if (_notes.isEmpty) {
+      return Expanded(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(Icons.inbox_outlined,
+                    size: 32, color: AppColors.primaryTeal),
+              ),
+              const SizedBox(height: 16),
+              const Text('No meeting notes yet',
+                  style: AppTextStyles.heading3),
+              const SizedBox(height: 8),
+              const Text(
+                'Notes from minute takers will appear here.',
+                style: AppTextStyles.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (isDesktop) {
+      return Expanded(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 380,
+              child: _NoteListPanel(
+                notes: _filteredNotes,
+                selectedNote: _selectedNote,
+                searchController: _searchController,
+                onSearch: (String q) =>
+                    setState(() => _searchQuery = q),
+                onSelectNote: (MeetingNote n) =>
+                    setState(() => _selectedNote = n),
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              flex: 3,
+              child: _selectedNote != null
+                  ? _DocumentPanel(note: _selectedNote!)
+                  : const SizedBox.shrink(),
+            ),
+            const SizedBox(width: 20),
+            SizedBox(
+              width: 300,
+              child: _selectedNote != null
+                  ? _MetadataPanel(note: _selectedNote!)
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Expanded(
+      child: ScrollConfiguration(
+        behavior: const _InboxScrollBehavior(),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              _NoteListPanel(
+                notes: _filteredNotes,
+                selectedNote: _selectedNote,
+                searchController: _searchController,
+                onSearch: (String q) =>
+                    setState(() => _searchQuery = q),
+                onSelectNote: (MeetingNote n) =>
+                    setState(() => _selectedNote = n),
+                isMobile: true,
+              ),
+              if (_selectedNote != null) ...[
+                const SizedBox(height: 20),
+                _DocumentPanel(note: _selectedNote!),
+                const SizedBox(height: 20),
+                _MetadataPanel(note: _selectedNote!),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditRequestsTab(bool isDesktop) {
+    if (_editRequests.isEmpty) {
+      return Expanded(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(Icons.edit_note_outlined,
+                    size: 32, color: AppColors.statusPending),
+              ),
+              const SizedBox(height: 16),
+              const Text('لا توجد طلبات تعديل',
+                  style: AppTextStyles.heading3),
+              const SizedBox(height: 8),
+              const Text(
+                'طلبات التعديل من رؤساء الأقسام ستظهر هنا.',
+                style: AppTextStyles.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (isDesktop) {
+      return Expanded(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 380,
+              child: _EditRequestListPanel(
+                requests: _filteredEditRequests,
+                selectedRequest: _selectedEditRequest,
+                searchController: _searchController,
+                onSearch: (String q) =>
+                    setState(() => _searchQuery = q),
+                onSelectRequest: (Meeting m) =>
+                    setState(() => _selectedEditRequest = m),
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              flex: 3,
+              child: _selectedEditRequest != null
+                  ? _EditRequestDocumentPanel(
+                      meeting: _selectedEditRequest!)
+                  : const SizedBox.shrink(),
+            ),
+            const SizedBox(width: 20),
+            SizedBox(
+              width: 300,
+              child: _selectedEditRequest != null
+                  ? _EditRequestDetailPanel(
+                      meeting: _selectedEditRequest!,
+                      onEdit: () => context.go('/create',
+                          extra: _selectedEditRequest),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Expanded(
+      child: ScrollConfiguration(
+        behavior: const _InboxScrollBehavior(),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              _EditRequestListPanel(
+                requests: _filteredEditRequests,
+                selectedRequest: _selectedEditRequest,
+                searchController: _searchController,
+                onSearch: (String q) =>
+                    setState(() => _searchQuery = q),
+                onSelectRequest: (Meeting m) =>
+                    setState(() => _selectedEditRequest = m),
+                isMobile: true,
+              ),
+              if (_selectedEditRequest != null) ...[
+                const SizedBox(height: 20),
+                _EditRequestDocumentPanel(
+                    meeting: _selectedEditRequest!),
+                const SizedBox(height: 20),
+                _EditRequestDetailPanel(
+                  meeting: _selectedEditRequest!,
+                  onEdit: () => context.go('/create',
+                      extra: _selectedEditRequest),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Header ─────────────────────────────────────────────────────────────────
 
 class _InboxHeader extends StatelessWidget {
   final int noteCount;
+  final int editRequestCount;
+  final int activeTab;
+  final ValueChanged<int> onTabChanged;
 
   const _InboxHeader({
     required this.noteCount,
+    required this.editRequestCount,
+    required this.activeTab,
+    required this.onTabChanged,
   });
 
   @override
@@ -245,20 +395,6 @@ class _InboxHeader extends StatelessWidget {
                     .copyWith(color: AppColors.primaryTeal),
               ),
             ),
-            if (noteCount > 0)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.statusDraft.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$noteCount new',
-                  style: AppTextStyles.tag
-                      .copyWith(color: AppColors.statusDraft),
-                ),
-              ),
           ],
         );
 
@@ -268,12 +404,104 @@ class _InboxHeader extends StatelessWidget {
             breadcrumbs,
             const SizedBox(height: 10),
             const Text(
-              'Meeting Notes from Minute Takers',
+              'Secretary Inbox',
               style: AppTextStyles.pageTitle,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _TabButton(
+                  label: 'محاضر الاجتماعات',
+                  count: noteCount,
+                  isActive: activeTab == 0,
+                  onTap: () => onTabChanged(0),
+                ),
+                const SizedBox(width: 8),
+                _TabButton(
+                  label: 'طلبات التعديل',
+                  count: editRequestCount,
+                  isActive: activeTab == 1,
+                  onTap: () => onTabChanged(1),
+                  accentColor: AppColors.statusDraft,
+                ),
+              ],
             ),
           ],
         );
       },
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool isActive;
+  final VoidCallback onTap;
+  final Color? accentColor;
+
+  const _TabButton({
+    required this.label,
+    required this.count,
+    required this.isActive,
+    required this.onTap,
+    this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = accentColor ?? AppColors.primaryTeal;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isActive
+              ? color.withValues(alpha: 0.1)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isActive
+                ? color.withValues(alpha: 0.4)
+                : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                color: isActive ? color : AppColors.textSecondary,
+              ),
+            ),
+            if (count > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? color.withValues(alpha: 0.2)
+                      : AppColors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isActive ? color : AppColors.textMuted,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1372,6 +1600,417 @@ class _NextStepCard extends StatelessWidget {
             'Use these notes to draft the official decision document. Action items and tagged statements will pre-fill the editor.',
             style: AppTextStyles.bodySmall
                 .copyWith(color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Edit request list panel ───────────────────────────────────────────────
+
+class _EditRequestListPanel extends StatelessWidget {
+  final List<Meeting> requests;
+  final Meeting? selectedRequest;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearch;
+  final ValueChanged<Meeting> onSelectRequest;
+  final bool isMobile;
+
+  const _EditRequestListPanel({
+    required this.requests,
+    required this.selectedRequest,
+    required this.searchController,
+    required this.onSearch,
+    required this.onSelectRequest,
+    this.isMobile = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget searchBar = TextField(
+      controller: searchController,
+      onChanged: onSearch,
+      decoration: InputDecoration(
+        hintText: 'ابحث في طلبات التعديل...',
+        hintStyle: AppTextStyles.bodySmall,
+        prefixIcon: const Icon(Icons.search,
+            size: 18, color: AppColors.textMuted),
+        contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+      ),
+    );
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          searchBar,
+          const SizedBox(height: 12),
+          ...requests.map((Meeting m) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _EditRequestCard(
+                  meeting: m,
+                  isSelected: selectedRequest?.id == m.id,
+                  onTap: () => onSelectRequest(m),
+                ),
+              )),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        searchBar,
+        const SizedBox(height: 12),
+        Expanded(
+          child: ScrollConfiguration(
+            behavior: const _InboxScrollBehavior(),
+            child: ListView.separated(
+              itemCount: requests.length,
+              separatorBuilder: (BuildContext _, int _a) =>
+                  const SizedBox(height: 8),
+              itemBuilder: (BuildContext context, int index) {
+                final Meeting m = requests[index];
+                return _EditRequestCard(
+                  meeting: m,
+                  isSelected: selectedRequest?.id == m.id,
+                  onTap: () => onSelectRequest(m),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Edit request card ────────────────────────────────────────────────────
+
+class _EditRequestCard extends StatelessWidget {
+  final Meeting meeting;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _EditRequestCard({
+    required this.meeting,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final String dateStr =
+        DateFormat('yyyy-MM-dd').format(meeting.meetingDate);
+    final String editNote = meeting.requestedEdit ?? '';
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.statusDraft
+                : AppColors.border.withValues(alpha: 0.7),
+            width: isSelected ? 1.5 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.statusDraft.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.statusDraft.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.edit_outlined,
+                          size: 12, color: AppColors.statusDraft),
+                      const SizedBox(width: 4),
+                      Text(
+                        'طلب تعديل',
+                        style: AppTextStyles.tag
+                            .copyWith(color: AppColors.statusDraft),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                Text(dateStr, style: AppTextStyles.caption),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              meeting.title,
+              style: AppTextStyles.bodyMedium,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textDirection: ui.TextDirection.rtl,
+            ),
+            if (editNote.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4ED),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFFD4B8)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.format_quote,
+                        size: 14, color: AppColors.statusDraft),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        editNote,
+                        style: AppTextStyles.bodySmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textDirection: ui.TextDirection.rtl,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined,
+                    size: 12, color: AppColors.textMuted),
+                const SizedBox(width: 4),
+                Text(dateStr, style: AppTextStyles.caption),
+                if (meeting.councilType != null) ...[
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.tagBlueBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      meeting.councilType!,
+                      style: AppTextStyles.tag
+                          .copyWith(color: AppColors.primaryTeal),
+                      textDirection: ui.TextDirection.rtl,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Edit request document panel ──────────────────────────────────────────
+
+class _EditRequestDocumentPanel extends StatelessWidget {
+  final Meeting meeting;
+
+  const _EditRequestDocumentPanel({required this.meeting});
+
+  @override
+  Widget build(BuildContext context) {
+    final DateFormat fmt = DateFormat('yyyy/MM/dd');
+    final DocumentPreviewData data = DocumentPreviewData(
+      meetingTitle: meeting.title,
+      councilType: meeting.councilType ?? '',
+      sessionNumber: meeting.sessionNumber ?? '',
+      meetingDate: fmt.format(meeting.meetingDate),
+      decisionNumber: meeting.decisionNumber ?? '',
+      decisionText: meeting.meetingContent ?? '',
+      signatoryName: meeting.signatoryName ?? 'أ.د. عبدالله',
+      signatoryTitle: meeting.signatoryTitle ?? 'رئيس القسم',
+    );
+
+    return ScrollConfiguration(
+      behavior: const _InboxScrollBehavior(),
+      child: SingleChildScrollView(
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: AppDecorations.card,
+          child: DocumentPreview(
+            data: data,
+            showPlaceholders: false,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Edit request detail/action panel ─────────────────────────────────────
+
+class _EditRequestDetailPanel extends StatelessWidget {
+  final Meeting meeting;
+  final VoidCallback onEdit;
+
+  const _EditRequestDetailPanel({
+    required this.meeting,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final String editNote = meeting.requestedEdit ?? '';
+
+    return ScrollConfiguration(
+      behavior: const _InboxScrollBehavior(),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: AppDecorations.cardWithBorder,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.edit_note_outlined,
+                          size: 18, color: AppColors.statusDraft),
+                      const SizedBox(width: 8),
+                      const Text('ملاحظة التعديل',
+                          style: AppTextStyles.sectionTitle),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (editNote.isEmpty)
+                    const Text('لا توجد ملاحظة.',
+                        style: AppTextStyles.bodySmall)
+                  else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF4ED),
+                        borderRadius: BorderRadius.circular(10),
+                        border:
+                            Border.all(color: const Color(0xFFFFD4B8)),
+                      ),
+                      child: Text(
+                        editNote,
+                        style: AppTextStyles.body,
+                        textDirection: ui.TextDirection.rtl,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: AppDecorations.cardWithBorder,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.info_outline,
+                          size: 18, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      const Text('تفاصيل الاجتماع',
+                          style: AppTextStyles.sectionTitle),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _detailRow('العنوان', meeting.title),
+                  _detailRow('التاريخ',
+                      DateFormat('yyyy/MM/dd').format(meeting.meetingDate)),
+                  if (meeting.councilType != null)
+                    _detailRow('نوع المجلس', meeting.councilType!),
+                  if (meeting.sessionNumber != null)
+                    _detailRow('رقم الجلسة', meeting.sessionNumber!),
+                  if (meeting.decisionNumber != null)
+                    _detailRow('رقم القرار', meeting.decisionNumber!),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('تعديل الاجتماع',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryTeal,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: AppTextStyles.caption.copyWith(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+              textDirection: ui.TextDirection.rtl,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: AppTextStyles.bodySmall,
+              textDirection: ui.TextDirection.rtl,
+            ),
           ),
         ],
       ),

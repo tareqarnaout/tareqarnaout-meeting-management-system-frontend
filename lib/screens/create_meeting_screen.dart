@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 
@@ -37,7 +38,6 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       TextEditingController(text: DateFormat('MM/dd/yyyy').format(DateTime.now()));
   final TextEditingController _decisionTextController = TextEditingController();
   final TextEditingController _connectionIdController = TextEditingController();
-  final TextEditingController _copyToController = TextEditingController();
   final TextEditingController _signatoryNameController =
       TextEditingController(text: 'أ.د. عبدالله');
   final TextEditingController _signatoryTitleController =
@@ -59,8 +59,11 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
   String _selectedRelationshipType = 'Applies';
   final List<_AddedConnection> _addedConnections = [];
 
-  // Copy-to list
-  final List<String> _copyToList = [];
+  // Copy-to list (user-based)
+  final List<Map<String, dynamic>> _selectedCopyTo = [];
+  List<Map<String, dynamic>> _filteredCopyToUsers = [];
+  bool _showCopyToResults = false;
+  final TextEditingController _copyToSearchController = TextEditingController();
 
   // Users for required signatures
   List<Map<String, dynamic>> _allUsers = [];
@@ -72,6 +75,8 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       TextEditingController();
 
   static const String _draftKey = 'meeting_draft';
+  Timer? _draftDebounce;
+  bool _draftLoaded = false;
 
   @override
   void initState() {
@@ -82,6 +87,31 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     } else {
       _loadDraft();
     }
+    _addAutoSaveListeners();
+  }
+
+  void _addAutoSaveListeners() {
+    for (final TextEditingController c in [
+      _meetingTitleController,
+      _referenceNumberController,
+      _sessionNumberController,
+      _academicYearController,
+      _decisionNumberController,
+      _meetingDateController,
+      _decisionTextController,
+      _signatoryNameController,
+      _signatoryTitleController,
+    ]) {
+      c.addListener(_scheduleDraftSave);
+    }
+  }
+
+  void _scheduleDraftSave() {
+    if (!_draftLoaded || widget.editMeeting != null) return;
+    _draftDebounce?.cancel();
+    _draftDebounce = Timer(const Duration(milliseconds: 500), () {
+      _saveDraft();
+    });
   }
 
   void _prefillFromMeeting() {
@@ -112,7 +142,15 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       'councilType': _selectedCouncilType,
       'signatoryName': _signatoryNameController.text,
       'signatoryTitle': _signatoryTitleController.text,
-      'copyToList': _copyToList,
+      'copyToUsers': _selectedCopyTo,
+      'recipients': _selectedRecipients,
+      'signatories': _selectedSignatories,
+      'connections': _addedConnections
+          .map((_AddedConnection c) => {
+                'meetingId': c.meetingId,
+                'relationshipType': c.relationshipType,
+              })
+          .toList(),
     };
     await prefs.setString(_draftKey, jsonEncode(draft));
   }
@@ -120,7 +158,10 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
   Future<void> _loadDraft() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final String? raw = prefs.getString(_draftKey);
-    if (raw == null) return;
+    if (raw == null) {
+      _draftLoaded = true;
+      return;
+    }
     try {
       final Map<String, dynamic> draft =
           jsonDecode(raw) as Map<String, dynamic>;
@@ -136,11 +177,35 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
         _selectedCouncilType = draft['councilType'] as String? ?? 'مجلس القسم';
         _signatoryNameController.text = draft['signatoryName'] as String? ?? 'أ.د. عبدالله';
         _signatoryTitleController.text = draft['signatoryTitle'] as String? ?? 'رئيس القسم';
-        final List<dynamic>? copyTo = draft['copyToList'] as List<dynamic>?;
+        final List<dynamic>? copyTo = draft['copyToUsers'] as List<dynamic>?;
         if (copyTo != null) {
-          _copyToList
+          _selectedCopyTo
             ..clear()
-            ..addAll(copyTo.cast<String>());
+            ..addAll(copyTo.map((dynamic e) => Map<String, dynamic>.from(e as Map)));
+        }
+        final List<dynamic>? recipients = draft['recipients'] as List<dynamic>?;
+        if (recipients != null) {
+          _selectedRecipients
+            ..clear()
+            ..addAll(recipients.map((dynamic e) => Map<String, dynamic>.from(e as Map)));
+        }
+        final List<dynamic>? signatories = draft['signatories'] as List<dynamic>?;
+        if (signatories != null) {
+          _selectedSignatories
+            ..clear()
+            ..addAll(signatories.map((dynamic e) => Map<String, dynamic>.from(e as Map)));
+        }
+        final List<dynamic>? connections = draft['connections'] as List<dynamic>?;
+        if (connections != null) {
+          _addedConnections
+            ..clear()
+            ..addAll(connections.map((dynamic e) {
+              final Map<String, dynamic> c = Map<String, dynamic>.from(e as Map);
+              return _AddedConnection(
+                meetingId: c['meetingId'] as int,
+                relationshipType: c['relationshipType'] as String,
+              );
+            }));
         }
         if (_meetingDateController.text.isNotEmpty) {
           try {
@@ -150,6 +215,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
         }
       });
     } catch (_) {}
+    _draftLoaded = true;
   }
 
   Future<void> _clearDraft() async {
@@ -198,6 +264,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       _showUserResults = false;
       _filteredUsers = [];
     });
+    _scheduleDraftSave();
   }
 
   void _removeSignatory(int userId) {
@@ -205,6 +272,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       _selectedSignatories
           .removeWhere((Map<String, dynamic> u) => u['id'] == userId);
     });
+    _scheduleDraftSave();
   }
 
   void _onRecipientSearchChanged(String query) {
@@ -238,6 +306,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       _showRecipientResults = false;
       _filteredRecipientUsers = [];
     });
+    _scheduleDraftSave();
   }
 
   void _removeRecipient(int userId) {
@@ -245,6 +314,49 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       _selectedRecipients
           .removeWhere((Map<String, dynamic> u) => u['id'] == userId);
     });
+    _scheduleDraftSave();
+  }
+
+  void _onCopyToSearchChanged(String query) {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _showCopyToResults = false;
+        _filteredCopyToUsers = [];
+      });
+      return;
+    }
+    final String lowerQuery = query.toLowerCase();
+    final List<int> selectedIds = _selectedCopyTo
+        .map((Map<String, dynamic> u) => u['id'] as int)
+        .toList();
+    setState(() {
+      _filteredCopyToUsers = _allUsers.where((Map<String, dynamic> u) {
+        final int id = u['id'] as int;
+        final String name =
+            (u['fullName'] as String? ?? u['email'] as String? ?? '')
+                .toLowerCase();
+        return !selectedIds.contains(id) && name.contains(lowerQuery);
+      }).toList();
+      _showCopyToResults = true;
+    });
+  }
+
+  void _addCopyToUser(Map<String, dynamic> user) {
+    setState(() {
+      _selectedCopyTo.add(user);
+      _copyToSearchController.clear();
+      _showCopyToResults = false;
+      _filteredCopyToUsers = [];
+    });
+    _scheduleDraftSave();
+  }
+
+  void _removeCopyToUser(int userId) {
+    setState(() {
+      _selectedCopyTo
+          .removeWhere((Map<String, dynamic> u) => u['id'] == userId);
+    });
+    _scheduleDraftSave();
   }
 
   void _addConnectionById() {
@@ -263,6 +375,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
           meetingId: id, relationshipType: _selectedRelationshipType));
       _connectionIdController.clear();
     });
+    _scheduleDraftSave();
   }
 
   void _removeConnection(int meetingId) {
@@ -270,10 +383,12 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       _addedConnections
           .removeWhere((_AddedConnection c) => c.meetingId == meetingId);
     });
+    _scheduleDraftSave();
   }
 
   @override
   void dispose() {
+    _draftDebounce?.cancel();
     _meetingTitleController.dispose();
     _referenceNumberController.dispose();
     _issueDateController.dispose();
@@ -283,7 +398,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     _meetingDateController.dispose();
     _decisionTextController.dispose();
     _connectionIdController.dispose();
-    _copyToController.dispose();
+    _copyToSearchController.dispose();
     _signatoryNameController.dispose();
     _signatoryTitleController.dispose();
     _recipientSearchController.dispose();
@@ -304,6 +419,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
         _selectedMeetingDate = picked;
         _meetingDateController.text = DateFormat('MM/dd/yyyy').format(picked);
       });
+      _scheduleDraftSave();
     }
   }
 
@@ -674,7 +790,10 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
                       DropdownMenuItem(value: 'مجلس الجامعة', child: Text('مجلس الجامعة')),
                     ],
                     onChanged: (String? value) {
-                      if (value != null) setState(() => _selectedCouncilType = value);
+                      if (value != null) {
+                        setState(() => _selectedCouncilType = value);
+                        _scheduleDraftSave();
+                      }
                     },
                   ),
                 ),
@@ -1023,50 +1142,187 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
           // Copy To
           _buildSectionCard(
             title: 'نسخة → الإطلاع',
-            subtitle: 'أضف الأشخاص الذين سيحصلون على نسخة من هذا القرار.',
+            subtitle: 'ابحث وأضف الأشخاص الذين سيحصلون على نسخة من هذا القرار.',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _copyToController,
-                        decoration: AppDecorations.inputDecoration(
-                          '',
-                          hint: 'أضف بالاسم والمنصب',
-                        ).copyWith(labelText: null),
-                        onSubmitted: (_) => _addCopyTo(),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      onPressed: _addCopyTo,
-                      icon: const Icon(Icons.add_circle_outline,
-                          color: AppColors.primaryTeal),
-                    ),
-                  ],
+                TextField(
+                  controller: _copyToSearchController,
+                  onChanged: _onCopyToSearchChanged,
+                  decoration: AppDecorations.inputDecoration(
+                    '',
+                    hint: 'ابحث بالاسم...',
+                    prefixIcon: const Icon(Icons.search,
+                        size: 18, color: AppColors.textMuted),
+                  ).copyWith(labelText: null),
                 ),
-                if (_copyToList.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _copyToList
-                        .map((String name) => Chip(
-                              label: Text(name,
-                                  style: const TextStyle(fontSize: 12)),
-                              deleteIcon: const Icon(Icons.close, size: 14),
-                              onDeleted: () =>
-                                  setState(() => _copyToList.remove(name)),
-                              backgroundColor:
-                                  AppColors.primaryTeal.withValues(alpha: 0.08),
-                              side: BorderSide(
-                                  color: AppColors.primaryTeal
-                                      .withValues(alpha: 0.3)),
-                            ))
-                        .toList(),
+                if (_showCopyToResults)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _filteredCopyToUsers.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('لم يتم العثور على مستخدمين.',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textMuted)),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            itemCount: _filteredCopyToUsers.length,
+                            separatorBuilder:
+                                (BuildContext context, int index) =>
+                                    const Divider(
+                                        height: 1, color: AppColors.divider),
+                            itemBuilder: (BuildContext context, int index) {
+                              final Map<String, dynamic> user =
+                                  _filteredCopyToUsers[index];
+                              final String name = user['fullName'] as String? ??
+                                  user['email'] as String? ??
+                                  'User #${user['id']}';
+                              final String email =
+                                  user['email'] as String? ?? '';
+                              return InkWell(
+                                onTap: () => _addCopyToUser(user),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 10),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 16,
+                                        backgroundColor: AppColors.primaryTeal
+                                            .withValues(alpha: 0.1),
+                                        child: Text(
+                                          name.isNotEmpty
+                                              ? name.characters.first
+                                              : '?',
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.primaryTeal),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(name,
+                                                style: const TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w500,
+                                                    color:
+                                                        AppColors.textPrimary)),
+                                            if (email.isNotEmpty)
+                                              Text(email,
+                                                  style: const TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppColors
+                                                          .textSecondary)),
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(Icons.add_circle_outline,
+                                          size: 18, color: AppColors.primaryTeal),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                   ),
+                if (_selectedCopyTo.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: Text('لم تتم إضافة أشخاص بعد.',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color:
+                                  AppColors.textMuted.withValues(alpha: 0.7))),
+                    ),
+                  )
+                else ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    '${_selectedCopyTo.length} شخص مضاف',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._selectedCopyTo.map((Map<String, dynamic> user) {
+                    final String name = user['fullName'] as String? ??
+                        user['email'] as String? ??
+                        'User #${user['id']}';
+                    final String email = user['email'] as String? ?? '';
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.pageBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: AppColors.border.withValues(alpha: 0.6)),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor:
+                                AppColors.primaryTeal.withValues(alpha: 0.1),
+                            child: Text(
+                              name.isNotEmpty ? name.characters.first : '?',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primaryTeal),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name,
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppColors.textPrimary)),
+                                if (email.isNotEmpty)
+                                  Text(email,
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _removeCopyToUser(user['id'] as int),
+                            child: const Icon(Icons.close,
+                                size: 16, color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
                 ],
               ],
             ),
@@ -1373,7 +1629,10 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       meetingDate: meetingDateFormatted,
       decisionNumber: _decisionNumberController.text.trim(),
       decisionText: _decisionTextController.text.trim(),
-      copyToList: List<String>.from(_copyToList),
+      copyToList: _selectedCopyTo
+          .map((Map<String, dynamic> u) =>
+              u['fullName'] as String? ?? u['email'] as String? ?? 'User #${u['id']}')
+          .toList(),
       signatoryName: _signatoryNameController.text.trim(),
       signatoryTitle: _signatoryTitleController.text.trim(),
     );
@@ -1443,19 +1702,6 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     );
   }
 
-
-  void _addCopyTo() {
-    final String text = _copyToController.text.trim();
-    if (text.isEmpty) return;
-    if (_copyToList.contains(text)) {
-      _showSnack('تمت الإضافة مسبقاً.');
-      return;
-    }
-    setState(() {
-      _copyToList.add(text);
-      _copyToController.clear();
-    });
-  }
 
   Widget _buildField({required String label, required Widget child}) {
     return Column(

@@ -42,6 +42,8 @@ dependencies:
   speech_to_text: ^7.3.0
   path_provider: ^2.1.5
   shared_preferences: ^2.5.5
+  pdf: ^3.11.2
+  printing: ^5.13.5
 
 dev_dependencies:
   flutter_test:
@@ -68,6 +70,8 @@ flutter:
   assets:
     - assets/psutLogo.png
     - assets/PSUT_Logo.png
+    - assets/fonts/Amiri-Regular.ttf
+    - assets/fonts/Amiri-Bold.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

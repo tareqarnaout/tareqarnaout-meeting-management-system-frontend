@@ -16,8 +16,13 @@ import 'screens/user_management_screen.dart';
 import 'screens/minute_taker_screen.dart';
 import 'screens/secretary_inbox_screen.dart';
 import 'services/auth_service.dart';
+import 'services/api_service.dart';
 
 void main() {
+  ApiService.onSessionExpired = () {
+    AuthService.clearCaches();
+    _router.go('/login');
+  };
   runApp(const MyApp());
 }
 

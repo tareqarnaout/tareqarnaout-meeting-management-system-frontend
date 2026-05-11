@@ -7,7 +7,14 @@
       "Bash(flutter pub *)",
       "Bash(flutter --version)",
       "Bash(flutter build *)",
-      "Bash(grep -E \"\\\\.\\(dart|csv|txt\\)$\")"
+      "Bash(grep -E \"\\\\.\\(dart|csv|txt\\)$\")",
+      "Bash(curl -L -o /tmp/NotoSansArabic.zip \"https://fonts.google.com/download?family=Noto+Sans+Arabic\")",
+      "Read(//tmp/**)",
+      "Bash(unzip -o NotoSansArabic.zip -d NotoSansArabic)",
+      "Bash(curl -L -o /tmp/NotoSansArabic-Regular.ttf \"https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf\")",
+      "Bash(curl -L -o /tmp/NotoSansArabic-Bold.ttf \"https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Bold.ttf\")",
+      "Bash(curl -L -o /tmp/amiri.zip \"https://github.com/aliftype/amiri/releases/download/1.000/Amiri-1.000.zip\")",
+      "Bash(unzip -o amiri.zip -d amiri_extract)"
     ]
   }
 }

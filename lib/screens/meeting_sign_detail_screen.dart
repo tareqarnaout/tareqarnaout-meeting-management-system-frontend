@@ -4,7 +4,10 @@ import 'package:intl/intl.dart';
 import '../constants/api_constants.dart';
 import '../constants/app_theme.dart';
 import '../models/meeting.dart';
+import '../models/user.dart';
 import '../services/meeting_service.dart';
+import '../services/pdf_service.dart';
+import '../services/user_service.dart';
 import '../widgets/document_preview.dart';
 import '../widgets/wave_scroll_button.dart';
 
@@ -21,10 +24,14 @@ class MeetingSignDetailScreen extends StatefulWidget {
 
 class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
   final MeetingService _meetingService = MeetingService();
+  final UserService _userService = UserService();
+  final PdfService _pdfService = PdfService();
   Meeting? _meeting;
+  Map<int, AppUser> _usersMap = {};
   bool _isLoading = true;
   bool _isSigning = false;
   bool _isRequestingEdit = false;
+  bool _isDownloadingPdf = false;
 
   @override
   void initState() {
@@ -33,25 +40,57 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
   }
 
   Future<void> _load() async {
-    if (widget.meeting != null) {
-      setState(() {
-        _meeting = widget.meeting;
-        _isLoading = false;
-      });
-      return;
-    }
-    final Meeting? meeting =
-        await _meetingService.getMeeting(widget.meetingId);
+    await _fetchMeeting();
     if (!mounted) return;
-    setState(() {
-      _meeting = meeting;
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _fetchMeeting() async {
+    final List<Meeting> pending = await _meetingService.getPendingSignMeetings();
+    final Meeting? fromPending = pending
+        .where((Meeting m) => m.id == widget.meetingId)
+        .firstOrNull;
+
+    if (fromPending != null) {
+      _meeting = fromPending;
+    } else if (widget.meeting != null) {
+      _meeting = widget.meeting;
+    } else {
+      _meeting = await _meetingService.getMeeting(widget.meetingId);
+    }
+
+    if (_meeting != null && _meeting!.signersNeededId.isNotEmpty) {
+      try {
+        final List<AppUser> users = await _userService.getUsers();
+        _usersMap = {for (final AppUser u in users) u.id!: u};
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _downloadPdf() async {
+    setState(() => _isDownloadingPdf = true);
+    try {
+      final DocumentPreviewData previewData = _buildPreviewData();
+      final String fileName = _meeting!.title.replaceAll(RegExp(r'[^\w؀-ۿ\s]'), '_');
+      await _pdfService.downloadPdf(previewData, fileName);
+    } catch (e, st) {
+      debugPrint('PDF generation error: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('An error occurred while generating the file. Please try again.'),
+          backgroundColor: AppColors.statusDraft,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isDownloadingPdf = false);
+    }
   }
 
   Future<void> _sign() async {
     setState(() => _isSigning = true);
-    final int statusCode = await _meetingService.verifySignature();
+    final int statusCode = await _meetingService.verifySignature(_meeting!.id!);
     if (!mounted) return;
     setState(() => _isSigning = false);
 
@@ -63,21 +102,24 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-      context.go('/review');
+      await _fetchMeeting();
+      if (mounted) setState(() {});
     } else if (statusCode == 409) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('You have already signed this meeting.'),
+          content: Text('لقد وقّعت على هذا الاجتماع مسبقاً.'),
           backgroundColor: AppColors.statusPending,
           behavior: SnackBarBehavior.floating,
         ),
       );
+      await _fetchMeeting();
+      if (mounted) setState(() {});
     } else if (statusCode == 401) {
       context.go('/login');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
+          content: Text('حدث خطأ. يرجى المحاولة مرة أخرى.'),
           backgroundColor: AppColors.statusDraft,
           behavior: SnackBarBehavior.floating,
         ),
@@ -127,13 +169,21 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
 
   DocumentPreviewData _buildPreviewData() {
     final DateFormat fmt = DateFormat('yyyy/MM/dd');
+    final DateTime date = _meeting!.meetingDate;
+    final int startYear = date.month >= 9 ? date.year : date.year - 1;
+    final String academicYear = '$startYear/${startYear + 1}';
+
     return DocumentPreviewData(
       meetingTitle: _meeting!.title,
       councilType: _meeting!.councilType ?? '',
       sessionNumber: _meeting!.sessionNumber ?? '',
-      meetingDate: fmt.format(_meeting!.meetingDate),
+      meetingDate: fmt.format(date),
+      issueDate: fmt.format(date),
+      academicYear: academicYear,
       decisionNumber: _meeting!.decisionNumber ?? '',
       decisionText: _meeting!.meetingContent ?? '',
+      signatoryName: _meeting!.signatoryName ?? 'أ.د. عبدالله',
+      signatoryTitle: _meeting!.signatoryTitle ?? 'رئيس القسم',
     );
   }
 
@@ -233,16 +283,79 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (_meeting != null)
+            _isDownloadingPdf
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white70,
+                    ),
+                  )
+                : InkWell(
+                    onTap: _downloadPdf,
+                    borderRadius: BorderRadius.circular(4),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.picture_as_pdf,
+                              size: 18, color: Colors.white70),
+                          SizedBox(width: 6),
+                          Text(
+                            'تحميل PDF',
+                            style:
+                                TextStyle(fontSize: 12, color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
         ],
       ),
     );
   }
 
+  List<_SignerInfo> _buildSignerList() {
+    final List<int> neededIds = _meeting!.signersNeededId;
+    final List<MeetingSignature> signatures = _meeting!.alreadySigned;
+
+    if (neededIds.isEmpty) {
+      return _meeting!.signatories.map(_toSignerInfo).toList();
+    }
+
+    final Map<int, MeetingSignature> signedMap = {
+      for (final MeetingSignature sig in signatures)
+        if (sig.hasSigned) sig.userId: sig
+    };
+
+    return neededIds.map((int uid) {
+      final MeetingSignature? sig = signedMap[uid];
+      final String name = _usersMap[uid]?.name ?? 'مستخدم #$uid';
+      return _SignerInfo(
+        userId: uid,
+        name: name,
+        hasSigned: sig != null,
+        signedAt: sig?.timestamp,
+      );
+    }).toList();
+  }
+
+  static _SignerInfo _toSignerInfo(Signatory s) {
+    return _SignerInfo(
+      userId: s.userId,
+      name: s.name,
+      hasSigned: s.hasSigned,
+      signedAt: s.signedAt,
+    );
+  }
+
   Widget _buildSidebar() {
-    final List<Signatory> signatories = _meeting!.signatories;
-    final int signedCount =
-        signatories.where((Signatory s) => s.hasSigned).length;
-    final int totalCount = signatories.length;
+    final List<_SignerInfo> signers = _buildSignerList();
+    final int signedCount = signers.where((_SignerInfo s) => s.hasSigned).length;
+    final int totalCount = signers.length;
     final double progress =
         totalCount > 0 ? signedCount / totalCount : 0;
     final bool hasSigned =
@@ -374,7 +487,7 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
         if (totalCount > 0) const SizedBox(height: 16),
 
         // Signatories list
-        if (signatories.isNotEmpty)
+        if (signers.isNotEmpty)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -391,11 +504,11 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary)),
                 const SizedBox(height: 14),
-                ...signatories.map((Signatory s) => _signatoryRow(s)),
+                ...signers.map((_SignerInfo s) => _signerRow(s)),
               ],
             ),
           ),
-        if (signatories.isNotEmpty) const SizedBox(height: 16),
+        if (signers.isNotEmpty) const SizedBox(height: 16),
 
         // Sign actions
         Container(
@@ -469,7 +582,7 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
     );
   }
 
-  Widget _signatoryRow(Signatory s) {
+  Widget _signerRow(_SignerInfo s) {
     final bool signed = s.hasSigned;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -661,4 +774,18 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
       },
     );
   }
+}
+
+class _SignerInfo {
+  final int? userId;
+  final String name;
+  final bool hasSigned;
+  final DateTime? signedAt;
+
+  _SignerInfo({
+    this.userId,
+    required this.name,
+    this.hasSigned = false,
+    this.signedAt,
+  });
 }

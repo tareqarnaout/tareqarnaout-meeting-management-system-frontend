@@ -13,6 +13,25 @@ class ApiService {
   static void setTokenCache(String token) => _tokenCache = token;
   static void clearTokenCache() => _tokenCache = null;
 
+  /// Called when any API response returns 401, signalling an expired session.
+  static VoidCallback? onSessionExpired;
+
+  static bool _handlingExpiry = false;
+
+  void _handleResponseIfUnauthorized(http.Response response) {
+    if (response.statusCode == 401 && !_handlingExpiry) {
+      _handlingExpiry = true;
+      _tokenCache = null;
+      _storage.delete(key: 'auth_token');
+      _storage.delete(key: 'role_id');
+      onSessionExpired?.call();
+      // Reset after a short delay so future 401s are still caught.
+      Future<void>.delayed(const Duration(seconds: 1), () {
+        _handlingExpiry = false;
+      });
+    }
+  }
+
   Future<Map<String, String>> getHeaders() async {
     _tokenCache ??= await _storage.read(key: 'auth_token');
     return {
@@ -49,6 +68,7 @@ class ApiService {
       final http.Response response =
           await http.get(Uri.parse(url), headers: headers);
       debugPrint('[API] GET $url → ${response.statusCode}');
+      _handleResponseIfUnauthorized(response);
       return response;
     } catch (e) {
       debugPrint('[API] GET $url ERROR: $e');
@@ -65,6 +85,7 @@ class ApiService {
       final http.Response response = await http.post(Uri.parse(url),
           headers: headers, body: jsonEncode(body));
       debugPrint('[API] POST $url → ${response.statusCode}');
+      _handleResponseIfUnauthorized(response);
       return response;
     } catch (e) {
       debugPrint('[API] POST $url ERROR: $e');
@@ -80,6 +101,7 @@ class ApiService {
       final http.Response response = await http.put(Uri.parse(url),
           headers: headers, body: jsonEncode(body));
       debugPrint('[API] PUT $url → ${response.statusCode}');
+      _handleResponseIfUnauthorized(response);
       return response;
     } catch (e) {
       debugPrint('[API] PUT $url ERROR: $e');
@@ -95,6 +117,7 @@ class ApiService {
       final http.Response response =
           await http.delete(Uri.parse(url), headers: headers);
       debugPrint('[API] DELETE $url → ${response.statusCode}');
+      _handleResponseIfUnauthorized(response);
       return response;
     } catch (e) {
       debugPrint('[API] DELETE $url ERROR: $e');

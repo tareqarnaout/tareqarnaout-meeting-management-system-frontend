@@ -24,6 +24,8 @@ class Meeting {
   final int signatureNeededCount;
   final String? requestedEdit;
   final int signatureStatus;
+  final List<int> signersNeededId;
+  final List<MeetingSignature> alreadySigned;
 
   Meeting({
     this.id,
@@ -49,6 +51,8 @@ class Meeting {
     this.signatureNeededCount = 0,
     this.requestedEdit,
     this.signatureStatus = 1,
+    this.signersNeededId = const [],
+    this.alreadySigned = const [],
   });
 
   factory Meeting.fromJson(Map<String, dynamic> json) {
@@ -89,6 +93,15 @@ class Meeting {
       signatureNeededCount: json['signatureNeededCount'] as int? ?? 0,
       requestedEdit: json['requestedEdit'] as String?,
       signatureStatus: json['signatureStatus'] as int? ?? 1,
+      signersNeededId: (json['signersNeededId'] as List<dynamic>?)
+              ?.map((dynamic e) => e as int)
+              .toList() ??
+          [],
+      alreadySigned: (json['alreadySigned'] as List<dynamic>?)
+              ?.map((dynamic e) =>
+                  MeetingSignature.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 
@@ -138,6 +151,39 @@ class Signatory {
       signedAt: json['signedAt'] != null
           ? DateTime.parse(json['signedAt'] as String)
           : null,
+    );
+  }
+}
+
+class MeetingSignature {
+  final int signatureId;
+  final int userId;
+  final int meetingId;
+  final DateTime? timestamp;
+  final String? ipAddress;
+  final int status;
+
+  MeetingSignature({
+    required this.signatureId,
+    required this.userId,
+    required this.meetingId,
+    this.timestamp,
+    this.ipAddress,
+    required this.status,
+  });
+
+  bool get hasSigned => status == MeetingStatus.finalized;
+
+  factory MeetingSignature.fromJson(Map<String, dynamic> json) {
+    return MeetingSignature(
+      signatureId: json['signatureID'] as int? ?? 0,
+      userId: json['userId'] as int? ?? 0,
+      meetingId: json['meetingId'] as int? ?? 0,
+      timestamp: json['timestamp'] != null
+          ? DateTime.tryParse(json['timestamp'] as String)
+          : null,
+      ipAddress: json['ipAddress'] as String?,
+      status: json['status'] as int? ?? 0,
     );
   }
 }

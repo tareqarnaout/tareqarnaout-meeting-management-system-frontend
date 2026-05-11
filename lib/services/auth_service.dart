@@ -141,9 +141,23 @@ class AuthService {
     }
   }
 
+  static void clearCaches() {
+    _authStateCache = false;
+    _roleIdCache = null;
+    ApiService.clearTokenCache();
+  }
+
   Future<bool> isAuthenticated() async {
-    // Return cached result to avoid storage reads on every route change.
-    if (_authStateCache != null) return _authStateCache!;
+    // Fast path: if we already know the user is logged in, just verify
+    // the token hasn't expired since the last check.
+    if (_authStateCache == true) {
+      final String? token = await getToken();
+      if (token == null || JwtDecoder.isExpired(token)) {
+        await _clearStoredAuth();
+        return false;
+      }
+      return true;
+    }
 
     final String? token = await getToken();
     if (token == null || token.isEmpty) {
@@ -153,15 +167,20 @@ class AuthService {
     }
 
     if (JwtDecoder.isExpired(token)) {
-      await _storage.delete(key: 'auth_token');
-      await _storage.delete(key: 'role_id');
-      _authStateCache = false;
-      _roleIdCache = null;
+      await _clearStoredAuth();
       return false;
     }
 
     ApiService.setTokenCache(token);
     _authStateCache = true;
     return true;
+  }
+
+  Future<void> _clearStoredAuth() async {
+    _authStateCache = false;
+    _roleIdCache = null;
+    ApiService.clearTokenCache();
+    await _storage.delete(key: 'auth_token');
+    await _storage.delete(key: 'role_id');
   }
 }

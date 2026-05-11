@@ -70,6 +70,8 @@ class MeetingService {
     }
     try {
       final response = await _api.get('/meetings/GetPendingSignMeetings');
+      print('[getPendingSignMeetings] status: ${response.statusCode}');
+      print('[getPendingSignMeetings] body: ${response.body}');
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
         _pendingCache = data
@@ -122,9 +124,10 @@ class MeetingService {
   }
 
   /// Returns status code: 200 = success, 401 = unauthorized, 409 = already signed
-  Future<int> verifySignature() async {
+  Future<int> verifySignature(int meetingId) async {
     try {
-      final response = await _api.post('/meetings/signature/verify', {});
+      final response = await _api.post(
+          '/meetings/signature/verify', {'meetingId': meetingId});
       if (response.statusCode == 200) invalidateCache();
       return response.statusCode;
     } catch (e) {

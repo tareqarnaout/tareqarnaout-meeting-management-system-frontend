@@ -1,10 +1,12 @@
 import 'dart:math';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../constants/app_theme.dart';
 import '../models/meeting.dart';
 import '../services/meeting_service.dart';
+import '../services/pdf_service.dart';
 import '../widgets/document_preview.dart';
 import '../widgets/graph_node.dart';
 
@@ -21,6 +23,7 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final MeetingService _meetingService = MeetingService();
+  final PdfService _pdfService = PdfService();
   late AnimationController _animController;
 
   final Set<String> _activeFilters = {'Applies', 'Change', 'Continue'};
@@ -33,6 +36,7 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
 
   Offset _panOffset = Offset.zero;
   double _zoom = 1.0;
+  double _baseZoom = 1.0;
   String? _draggingNodeId;
   Offset _lastFocalPoint = Offset.zero;
 
@@ -184,6 +188,26 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
     return null;
   }
 
+  DocumentPreviewData _buildPreviewDataFromMeeting(Meeting meeting) {
+    final DateFormat fmt = DateFormat('yyyy/MM/dd');
+    final DateTime date = meeting.meetingDate;
+    final int startYear = date.month >= 9 ? date.year : date.year - 1;
+    final String academicYear = '$startYear/${startYear + 1}';
+
+    return DocumentPreviewData(
+      meetingTitle: meeting.title,
+      councilType: meeting.councilType ?? 'مجلس القسم',
+      sessionNumber: meeting.sessionNumber ?? '',
+      decisionNumber: meeting.decisionNumber ?? '',
+      meetingDate: fmt.format(date),
+      issueDate: fmt.format(date),
+      academicYear: academicYear,
+      decisionText: meeting.meetingContent ?? '',
+      signatoryName: meeting.signatoryName ?? '',
+      signatoryTitle: meeting.signatoryTitle ?? '',
+    );
+  }
+
   Future<void> _showDocumentPreview(int meetingId) async {
     showDialog(
       context: context,
@@ -223,70 +247,13 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                 );
               }
 
-              final String meetingDateStr =
-                  '${meeting.meetingDate.year}/${meeting.meetingDate.month}/${meeting.meetingDate.day}';
+              final DocumentPreviewData previewData =
+                  _buildPreviewDataFromMeeting(meeting);
 
-              final DocumentPreviewData previewData = DocumentPreviewData(
-                meetingTitle: meeting.title,
-                councilType: meeting.councilType ?? 'مجلس القسم',
-                sessionNumber: meeting.sessionNumber ?? '',
-                decisionNumber: meeting.decisionNumber ?? '',
-                meetingDate: meetingDateStr,
-                decisionText: meeting.meetingContent ?? '',
-                signatoryName: meeting.signatoryName ?? '',
-                signatoryTitle: meeting.signatoryTitle ?? '',
-              );
-
-              return Container(
-                constraints: const BoxConstraints(maxWidth: 620, maxHeight: 800),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8EAF0),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(12)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.description_outlined,
-                              size: 18, color: AppColors.textSecondary),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              meeting.title,
-                              style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            icon: const Icon(Icons.close, size: 18),
-                            splashRadius: 16,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(20),
-                        child: Center(
-                          child: DocumentPreview(data: previewData),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              return _DocumentPreviewDialog(
+                meeting: meeting,
+                previewData: previewData,
+                pdfService: _pdfService,
               );
             },
           ),
@@ -570,9 +537,27 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                     ],
                   ),
                 )
-              : GestureDetector(
+              : Listener(
+                  onPointerSignal: (PointerSignalEvent event) {
+                    if (event is PointerScrollEvent) {
+                      final RenderBox box =
+                          context.findRenderObject() as RenderBox;
+                      final Offset localFocal =
+                          box.globalToLocal(event.position);
+                      final double oldZoom = _zoom;
+                      final double zoomDelta =
+                          event.scrollDelta.dy > 0 ? 0.9 : 1.1;
+                      setState(() {
+                        _zoom = (_zoom * zoomDelta).clamp(0.4, 2.0);
+                        _panOffset += localFocal / _zoom -
+                            localFocal / oldZoom;
+                      });
+                    }
+                  },
+                  child: GestureDetector(
                   onScaleStart: (ScaleStartDetails details) {
                     _lastFocalPoint = details.focalPoint;
+                    _baseZoom = _zoom;
                   },
                   onScaleUpdate: (ScaleUpdateDetails details) {
                     if (_draggingNodeId == null) {
@@ -581,8 +566,15 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                             (details.focalPoint - _lastFocalPoint) / _zoom;
                         _lastFocalPoint = details.focalPoint;
                         if (details.scale != 1.0) {
+                          final double oldZoom = _zoom;
                           _zoom =
-                              (_zoom * details.scale).clamp(0.4, 2.0);
+                              (_baseZoom * details.scale).clamp(0.4, 2.0);
+                          final RenderBox box =
+                              context.findRenderObject() as RenderBox;
+                          final Offset localFocal =
+                              box.globalToLocal(details.focalPoint);
+                          _panOffset += localFocal / _zoom -
+                              localFocal / oldZoom;
                         }
                       });
                     }
@@ -667,6 +659,7 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                       ),
                     ],
                   ),
+                ),
                 ),
     );
   }
@@ -765,6 +758,116 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
           ],
         ),
         child: Icon(icon, size: 16, color: AppColors.textSecondary),
+      ),
+    );
+  }
+}
+
+class _DocumentPreviewDialog extends StatefulWidget {
+  final Meeting meeting;
+  final DocumentPreviewData previewData;
+  final PdfService pdfService;
+
+  const _DocumentPreviewDialog({
+    required this.meeting,
+    required this.previewData,
+    required this.pdfService,
+  });
+
+  @override
+  State<_DocumentPreviewDialog> createState() => _DocumentPreviewDialogState();
+}
+
+class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
+  bool _isDownloading = false;
+
+  Future<void> _downloadPdf() async {
+    setState(() => _isDownloading = true);
+    try {
+      final String fileName =
+          widget.meeting.title.replaceAll(RegExp(r'[^\w؀-ۿ\s]'), '_');
+      await widget.pdfService.downloadPdf(widget.previewData, fileName);
+    } catch (e, st) {
+      debugPrint('PDF generation error: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('An error occurred while generating the file. Please try again.'),
+          backgroundColor: AppColors.statusDraft,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 620, maxHeight: 800),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8EAF0),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(12)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.description_outlined,
+                    size: 18, color: AppColors.textSecondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.meeting.title,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                _isDownloading
+                    ? const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        onPressed: _downloadPdf,
+                        icon: const Icon(Icons.picture_as_pdf, size: 18),
+                        tooltip: 'تحميل PDF',
+                        splashRadius: 16,
+                      ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, size: 18),
+                  splashRadius: 16,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Center(
+                child: DocumentPreview(data: widget.previewData),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

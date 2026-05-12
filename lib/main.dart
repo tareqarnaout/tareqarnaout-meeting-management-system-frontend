@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'constants/app_theme.dart';
@@ -85,27 +86,32 @@ final GoRouter _router = GoRouter(
 
     final bool goingToRegister = state.matchedLocation == '/register';
     if (!loggedIn && !goingToLogin && !goingToRegister) return '/login';
-    if (loggedIn && (goingToLogin || goingToRegister)) return '/';
+    if (loggedIn && (goingToLogin || goingToRegister)) {
+      final int? roleId = await _authService.getRoleId();
+      if (roleId == UserRole.admin) return '/users';
+      return '/';
+    }
 
     if (loggedIn) {
       final int? roleId = await _authService.getRoleId();
       final String location = state.matchedLocation;
-      final bool isAdminRoute = location == '/users';
-      final bool isMinuteRoute = location == '/minute';
 
-      if (isAdminRoute && roleId != UserRole.admin) return '/';
-      if (isMinuteRoute &&
+      if (roleId == UserRole.admin && location != '/users') return '/users';
+
+      if (location == '/users' && roleId != UserRole.admin) return '/';
+
+      if (location == '/create' &&
+          (roleId == UserRole.staffMember || roleId == UserRole.minuteTaker)) {
+        return '/';
+      }
+
+      if (location == '/minute' &&
           roleId != UserRole.minuteTaker &&
-          roleId != UserRole.admin) {
+          roleId != UserRole.departmentHead) {
         return '/';
       }
 
-      final bool isSecretaryRoute = location == '/secretary';
-      if (isSecretaryRoute &&
-          roleId != UserRole.secretary &&
-          roleId != UserRole.admin) {
-        return '/';
-      }
+      if (location == '/secretary' && roleId != UserRole.secretary) return '/';
     }
 
     return null;
@@ -136,6 +142,10 @@ final GoRouter _router = GoRouter(
         ),
         GoRoute(
           path: '/create',
+          redirect: (BuildContext context, GoRouterState state) {
+            if (!kIsWeb) return '/';
+            return null;
+          },
           pageBuilder: (BuildContext context, GoRouterState state) {
             final Meeting? editMeeting = state.extra as Meeting?;
             return _fadeSlide(

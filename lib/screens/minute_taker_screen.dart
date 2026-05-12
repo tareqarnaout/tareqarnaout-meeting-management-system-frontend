@@ -523,7 +523,12 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool isDesktop =
             constraints.maxWidth >= MinuteTakerScreen._desktopBreakpoint;
-        final EdgeInsets pagePadding = EdgeInsets.all(isDesktop ? 24 : 16);
+
+        if (!isDesktop) {
+          return _buildMobileLayout(context);
+        }
+
+        final EdgeInsets pagePadding = const EdgeInsets.all(24);
         final double sectionGap = textScale > 1.1 ? 18 : 22;
 
         final int presentCount = _attendees.where((Attendee a) => a.isPresent).length;
@@ -684,6 +689,283 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
       case RecordingState.idle:
         return Icons.mic_none;
     }
+  }
+
+  Widget _buildMobileLayout(BuildContext context) {
+    final double bottomPadding = MediaQuery.paddingOf(context).bottom;
+
+    return Container(
+      color: AppColors.pageBg,
+      child: Column(
+        children: [
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              padding: const EdgeInsets.all(16),
+              decoration: AppDecorations.cardWithBorder,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Live Transcript',
+                          style: AppTextStyles.sectionTitle),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            MinuteTag(
+                              label: 'Meeting opening and welcome',
+                              backgroundColor: AppColors.tagGreenBg,
+                              textColor: AppColors.primaryTeal,
+                            ),
+                            const SizedBox(height: 6),
+                            GestureDetector(
+                              onTap: _sttAvailable
+                                  ? null
+                                  : () {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Install an Arabic language pack in your device settings '
+                                            '(Settings > System > Languages & Input > Speech) to enable Arabic speech-to-text.',
+                                          ),
+                                          behavior: SnackBarBehavior.floating,
+                                          duration: Duration(seconds: 5),
+                                        ),
+                                      );
+                                    },
+                              child: MinuteTag(
+                                label: _sttAvailable
+                                    ? (_sttListening
+                                        ? 'Arabic STT On'
+                                        : 'Arabic STT Off')
+                                    : 'Arabic STT Unavailable',
+                                backgroundColor: _sttAvailable
+                                    ? AppColors.surfaceMuted
+                                    : AppColors.statusDraft
+                                        .withValues(alpha: 0.1),
+                                textColor: _sttAvailable
+                                    ? AppColors.textSecondary
+                                    : AppColors.statusDraft,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Expanded(
+                    child: _entries.isEmpty && _liveTranscript.isEmpty
+                        ? const TranscriptEmptyState(
+                            title: "Start capturing what's said",
+                            subtitle:
+                                'Pick a speaker, type the statement, and it will be timestamped under the active agenda item.',
+                          )
+                        : ListView.separated(
+                            itemCount: _entries.length +
+                                (_liveTranscript.isEmpty ? 0 : 1),
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (BuildContext context, int index) {
+                              if (_liveTranscript.isNotEmpty && index == 0) {
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceMuted,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: AppColors.border
+                                            .withValues(alpha: 0.7)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.mic,
+                                          size: 16,
+                                          color: AppColors.primaryTeal),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(_liveTranscript,
+                                            style: AppTextStyles.bodySmall),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              final int ei = _liveTranscript.isEmpty
+                                  ? index
+                                  : index - 1;
+                              final TranscriptEntry entry = _entries[ei];
+                              return TranscriptEntryTile(
+                                entry: entry,
+                                onTap: () => _showEntryEditor(entry),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                  top: BorderSide(
+                      color: AppColors.border.withValues(alpha: 0.5))),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: _speakers.contains(_selectedSpeaker)
+                      ? _selectedSpeaker
+                      : (_speakers.isNotEmpty ? _speakers.first : null),
+                  isExpanded: true,
+                  hint: Text('Speaker', style: AppTextStyles.bodySmall),
+                  items: _speakers
+                      .map((String s) => DropdownMenuItem<String>(
+                            value: s,
+                            child: Text(s,
+                                overflow: TextOverflow.ellipsis, maxLines: 1),
+                          ))
+                      .toList(),
+                  onChanged: (String? value) {
+                    if (value == null) return;
+                    setState(() => _selectedSpeaker = value);
+                  },
+                  decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    filled: true,
+                    fillColor: AppColors.surfaceMuted,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _statementController,
+                        onSubmitted: (_) => _addStatement(),
+                        decoration: InputDecoration(
+                          hintText: 'Type what was said...',
+                          hintStyle: AppTextStyles.bodySmall,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AppColors.border),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AppColors.border),
+                          ),
+                          filled: true,
+                          fillColor: AppColors.surfaceMuted,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      onPressed: _addStatement,
+                      icon: const Icon(Icons.add, size: 16),
+                      label: Text('Add', style: AppTextStyles.buttonSmall),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryTeal,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 8 + bottomPadding),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                  top: BorderSide(
+                      color: AppColors.border.withValues(alpha: 0.3))),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildMobileAction(
+                  icon: _recordButtonIcon(),
+                  label: _recordButtonLabel(),
+                  onTap: _handleRecordToggle,
+                ),
+                _buildMobileAction(
+                  icon: Icons.stop_circle_outlined,
+                  label: 'Stop',
+                  onTap: _recordingState == RecordingState.idle
+                      ? null
+                      : _stopRecording,
+                ),
+                _buildMobileAction(
+                  icon: Icons.add_box_outlined,
+                  label: 'Save',
+                  onTap: _saveToArchive,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileAction({
+    required IconData icon,
+    required String label,
+    VoidCallback? onTap,
+  }) {
+    final bool enabled = onTap != null;
+    final Color color =
+        enabled ? AppColors.textSecondary : AppColors.textMuted;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                  color: color.withValues(alpha: 0.4), width: 1.5),
+            ),
+            child: Icon(icon, size: 20, color: color),
+          ),
+          const SizedBox(height: 4),
+          Text(label,
+              style: AppTextStyles.caption.copyWith(color: color)),
+        ],
+      ),
+    );
   }
 }
 

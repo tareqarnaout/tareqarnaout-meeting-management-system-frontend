@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../constants/api_constants.dart';
@@ -141,8 +142,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 const SizedBox(height: 24),
 
-                _animatedSection(1, _buildCtaBanner(context, isMobile)),
-                const SizedBox(height: 24),
+                if (kIsWeb) ...[
+                  _animatedSection(1, _buildCtaBanner(context, isMobile)),
+                  const SizedBox(height: 24),
+                ],
 
                 _animatedSection(2, _buildStatsGrid(isMobile)),
                 const SizedBox(height: 28),
@@ -168,7 +171,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildMeetingsSection(BuildContext context, bool isMobile) {
     final List<Meeting> unsigned = _pendingMeetings
         .where((Meeting m) =>
-            !m.signatories.any((Signatory s) => s.hasSigned))
+            m.signatureStatus == MeetingStatus.pendingApproval)
         .toList();
     final List<Meeting> pendingOthers = _pendingMeetings
         .where((Meeting m) => m.status == MeetingStatus.pendingApproval)
@@ -211,9 +214,9 @@ class _DashboardScreenState extends State<DashboardScreen>
         else
           ...pendingOthers.map((Meeting m) {
             final int signed =
-                m.signatories.where((Signatory s) => s.hasSigned).length;
+                m.alreadySigned.where((MeetingSignature s) => s.hasSigned).length;
             final int total =
-                m.signatureNeededCount > 0 ? m.signatureNeededCount : 1;
+                m.signersNeededId.isNotEmpty ? m.signersNeededId.length : 1;
             final double progress = (signed / total).clamp(0.0, 1.0);
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -223,6 +226,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 date: m.meetingDate,
                 status: m.status,
                 progress: progress,
+                signedCount: signed,
+                totalCount: total,
               ),
             );
           }),
@@ -462,16 +467,21 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: Icon(icon, size: 20, color: color),
           ),
           const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(count,
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-              Text(label, style: AppTextStyles.caption),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(count,
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
+                Text(label,
+                    style: AppTextStyles.caption,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1),
+              ],
+            ),
           ),
         ],
       ),

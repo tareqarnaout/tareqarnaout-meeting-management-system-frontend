@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../constants/app_theme.dart';
@@ -24,15 +25,26 @@ class Sidebar extends StatefulWidget {
   const Sidebar({super.key, required this.currentRoute});
 
   static const List<SidebarItem> items = [
-    SidebarItem(label: 'Dashboard', icon: Icons.dashboard_outlined, route: '/'),
     SidebarItem(
-        label: 'Create Meeting', icon: Icons.add_circle_outline, route: '/create'),
+        label: 'Dashboard',
+        icon: Icons.dashboard_outlined,
+        route: '/',
+        allowedRoles: [UserRole.secretary, UserRole.departmentHead, UserRole.staffMember, UserRole.minuteTaker]),
     SidebarItem(
-        label: 'Review & Sign', icon: Icons.draw_outlined, route: '/review'),
+        label: 'Create Meeting',
+        icon: Icons.add_circle_outline,
+        route: '/create',
+        allowedRoles: [UserRole.secretary, UserRole.departmentHead]),
+    SidebarItem(
+        label: 'Review & Sign',
+        icon: Icons.draw_outlined,
+        route: '/review',
+        allowedRoles: [UserRole.secretary, UserRole.departmentHead, UserRole.staffMember, UserRole.minuteTaker]),
     SidebarItem(
         label: 'Meetings Archive',
         icon: Icons.archive_outlined,
-        route: '/archive'),
+        route: '/archive',
+        allowedRoles: [UserRole.secretary, UserRole.departmentHead, UserRole.staffMember, UserRole.minuteTaker]),
     SidebarItem(
         label: 'User Management',
         icon: Icons.admin_panel_settings_outlined,
@@ -42,7 +54,7 @@ class Sidebar extends StatefulWidget {
         label: 'Minute Taker',
         icon: Icons.edit_note_outlined,
         route: '/minute',
-        allowedRoles: [UserRole.minuteTaker]),
+        allowedRoles: [UserRole.minuteTaker, UserRole.departmentHead]),
     SidebarItem(
         label: 'Secretary Inbox',
         icon: Icons.inbox_outlined,
@@ -72,7 +84,7 @@ class _SidebarState extends State<Sidebar> {
   Widget build(BuildContext context) {
     final List<SidebarItem> visibleItems = Sidebar.items
         .where((SidebarItem item) {
-          if (_roleId == UserRole.admin) return true;
+          if (!kIsWeb && item.route == '/create') return false;
           return item.allowedRoles == null ||
               (_roleId != null && item.allowedRoles!.contains(_roleId));
         })

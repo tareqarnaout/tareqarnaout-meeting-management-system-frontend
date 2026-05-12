@@ -170,7 +170,6 @@ class GraphEdgePainter extends CustomPainter {
   final List<GraphNodeData> nodes;
   final List<GraphEdge> edges;
   final Offset panOffset;
-  final double zoom;
 
   static const Map<String, Color> _edgeColors = {
     'Applies': Color(0xFF10B981),
@@ -188,7 +187,6 @@ class GraphEdgePainter extends CustomPainter {
     required this.nodes,
     required this.edges,
     required this.panOffset,
-    required this.zoom,
   });
 
   @override
@@ -200,9 +198,9 @@ class GraphEdgePainter extends CustomPainter {
 
       final Color edgeColor = _edgeColors[edge.label] ?? const Color(0xFFCBD5E1);
 
-      final Offset sCenter = (source.position + panOffset) * zoom +
+      final Offset sCenter = source.position + panOffset +
           const Offset(_nodeHalfW, _nodeHalfH);
-      final Offset tCenter = (target.position + panOffset) * zoom +
+      final Offset tCenter = target.position + panOffset +
           const Offset(_nodeHalfW, _nodeHalfH);
 
       final Offset sEdge = _nodeEdgePoint(sCenter, tCenter);
@@ -212,7 +210,7 @@ class GraphEdgePainter extends CustomPainter {
       final Offset perpDir = Offset(-(tEdge.dy - sEdge.dy), tEdge.dx - sEdge.dx);
       final double perpLen = perpDir.distance;
       final Offset curveOffset = perpLen > 0
-          ? perpDir / perpLen * 25 * zoom
+          ? perpDir / perpLen * 25
           : Offset.zero;
       final Offset controlPt = rawMid + curveOffset;
 
@@ -232,7 +230,7 @@ class GraphEdgePainter extends CustomPainter {
       if (tangentLen > 0) {
         final Offset unitTangent = tangent / tangentLen;
         final Offset perp = Offset(-unitTangent.dy, unitTangent.dx);
-        final double arrowLen = _arrowSize * zoom.clamp(0.6, 1.4);
+        final double arrowLen = _arrowSize;
         final double arrowHalfW = arrowLen * 0.45;
         final Offset arrowBase = tEdge - unitTangent * arrowLen;
 
@@ -298,8 +296,8 @@ class GraphEdgePainter extends CustomPainter {
     final Offset dir = other - nodeCenter;
     if (dir.distance == 0) return nodeCenter;
 
-    final double hw = _nodeHalfW * zoom;
-    final double hh = _nodeHalfH * zoom;
+    const double hw = _nodeHalfW;
+    const double hh = _nodeHalfH;
 
     final double scaleX = dir.dx != 0 ? (hw / dir.dx.abs()) : double.infinity;
     final double scaleY = dir.dy != 0 ? (hh / dir.dy.abs()) : double.infinity;

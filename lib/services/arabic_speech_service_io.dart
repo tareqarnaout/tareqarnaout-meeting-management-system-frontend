@@ -33,11 +33,17 @@ class ArabicSpeechService {
         onStatus: _handleStatus,
         onError: _handleError,
       );
+      if (!_isAvailable) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        _isAvailable = await _speech.initialize(
+          onStatus: _handleStatus,
+          onError: _handleError,
+        );
+      }
       if (_isAvailable) {
         final List<stt.LocaleName> locales = await _speech.locales();
         _localeId = _findArabicLocale(locales);
         if (_localeId == null) {
-          // Device has speech recognition but no Arabic locale installed.
           _isAvailable = false;
         }
       }
@@ -47,12 +53,16 @@ class ArabicSpeechService {
     return _isAvailable;
   }
 
+  static String _normalizeLocaleId(String id) =>
+      id.toLowerCase().replaceAll('_', '-');
+
   String? _findArabicLocale(List<stt.LocaleName> locales) {
     for (final String prefix in _arabicPrefixes) {
+      final String normalizedPrefix = _normalizeLocaleId(prefix);
       final stt.LocaleName? match = locales.cast<stt.LocaleName?>().firstWhere(
         (stt.LocaleName? l) =>
             l != null &&
-            l.localeId.toLowerCase().startsWith(prefix.toLowerCase()),
+            _normalizeLocaleId(l.localeId).startsWith(normalizedPrefix),
         orElse: () => null,
       );
       if (match != null) return match.localeId;

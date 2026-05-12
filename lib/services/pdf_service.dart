@@ -1,11 +1,14 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../widgets/document_preview.dart';
+import 'pdf_downloader_stub.dart'
+    if (dart.library.html) 'pdf_downloader_web.dart' as pdf_downloader;
 
 class PdfService {
   static const PdfColor _inkColor = PdfColor.fromInt(0xFF1B3A5C);
@@ -240,6 +243,10 @@ class PdfService {
 
   Future<void> downloadPdf(DocumentPreviewData data, String fileName) async {
     final Uint8List bytes = await generateMeetingPdf(data);
-    await Printing.sharePdf(bytes: bytes, filename: '$fileName.pdf');
+    if (kIsWeb) {
+      await pdf_downloader.downloadPdfBytes(bytes, '$fileName.pdf');
+    } else {
+      await Printing.sharePdf(bytes: bytes, filename: '$fileName.pdf');
+    }
   }
 }

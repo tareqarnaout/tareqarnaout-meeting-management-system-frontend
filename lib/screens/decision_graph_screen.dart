@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -21,7 +20,6 @@ class DecisionGraphScreen extends StatefulWidget {
 
 class _DecisionGraphScreenState extends State<DecisionGraphScreen>
     with SingleTickerProviderStateMixin {
-  final TextEditingController _searchController = TextEditingController();
   final MeetingService _meetingService = MeetingService();
   final PdfService _pdfService = PdfService();
   late AnimationController _animController;
@@ -35,12 +33,11 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
   Meeting? _focusedMeeting;
 
   Offset _panOffset = Offset.zero;
-  double _zoom = 1.0;
-  double _baseZoom = 1.0;
   String? _draggingNodeId;
   Offset _lastFocalPoint = Offset.zero;
 
   bool _isSimulating = false;
+  final GlobalKey _canvasKey = GlobalKey();
 
   @override
   void initState() {
@@ -262,20 +259,9 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
     );
   }
 
-  void _onSearch(String query) {
-    setState(() {
-      for (final GraphNodeData node in _nodes) {
-        node.isHighlighted = node.id == 'center' ||
-            (query.isNotEmpty &&
-                node.title.toLowerCase().contains(query.toLowerCase()));
-      }
-    });
-  }
-
   @override
   void dispose() {
     _animController.dispose();
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -335,19 +321,6 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                 ),
                 const SizedBox(height: 16),
 
-                // Search
-                TextField(
-                  controller: _searchController,
-                  onChanged: _onSearch,
-                  decoration: AppDecorations.inputDecoration(
-                    '',
-                    hint: 'Search for meetings, decisions...',
-                    suffixIcon: const Icon(Icons.search,
-                        size: 18, color: AppColors.textMuted),
-                  ).copyWith(labelText: null),
-                ),
-                const SizedBox(height: 12),
-
                 // Filter chips
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -390,9 +363,9 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                                       fontWeight: FontWeight.w600)),
                               TextSpan(
                                   text: isMobile
-                                      ? 'Drag nodes to rearrange, pinch to zoom. Double-tap a node to view its document.'
+                                      ? 'Drag nodes to rearrange. Double-tap a node to view its document.'
                                       : 'Double-click a node to view its document. '
-                                          'Drag nodes to rearrange, scroll to zoom, and use filters to focus on specific relationship types.'),
+                                          'Drag nodes to rearrange and use filters to focus on specific relationship types.'),
                             ],
                           ),
                         ),
@@ -537,49 +510,21 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                     ],
                   ),
                 )
-              : Listener(
-                  onPointerSignal: (PointerSignalEvent event) {
-                    if (event is PointerScrollEvent) {
-                      final RenderBox box =
-                          context.findRenderObject() as RenderBox;
-                      final Offset localFocal =
-                          box.globalToLocal(event.position);
-                      final double oldZoom = _zoom;
-                      final double zoomDelta =
-                          event.scrollDelta.dy > 0 ? 0.9 : 1.1;
-                      setState(() {
-                        _zoom = (_zoom * zoomDelta).clamp(0.4, 2.0);
-                        _panOffset += localFocal / _zoom -
-                            localFocal / oldZoom;
-                      });
-                    }
-                  },
-                  child: GestureDetector(
+              : GestureDetector(
                   onScaleStart: (ScaleStartDetails details) {
                     _lastFocalPoint = details.focalPoint;
-                    _baseZoom = _zoom;
                   },
                   onScaleUpdate: (ScaleUpdateDetails details) {
                     if (_draggingNodeId == null) {
                       setState(() {
                         _panOffset +=
-                            (details.focalPoint - _lastFocalPoint) / _zoom;
+                            details.focalPoint - _lastFocalPoint;
                         _lastFocalPoint = details.focalPoint;
-                        if (details.scale != 1.0) {
-                          final double oldZoom = _zoom;
-                          _zoom =
-                              (_baseZoom * details.scale).clamp(0.4, 2.0);
-                          final RenderBox box =
-                              context.findRenderObject() as RenderBox;
-                          final Offset localFocal =
-                              box.globalToLocal(details.focalPoint);
-                          _panOffset += localFocal / _zoom -
-                              localFocal / oldZoom;
-                        }
                       });
                     }
                   },
                   child: Stack(
+                    key: _canvasKey,
                     children: [
                       Positioned.fill(
                         child: CustomPaint(
@@ -587,13 +532,11 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                             nodes: _nodes,
                             edges: _filteredEdges,
                             panOffset: _panOffset,
-                            zoom: _zoom,
                           ),
                         ),
                       ),
                       ..._nodes.map((GraphNodeData node) {
-                        final Offset pos =
-                            (node.position + _panOffset) * _zoom;
+                        final Offset pos = node.position + _panOffset;
                         return Positioned(
                           left: pos.dx,
                           top: pos.dy,
@@ -613,8 +556,7 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                             },
                             onPanUpdate: (DragUpdateDetails details) {
                               setState(() {
-                                node.position +=
-                                    details.delta / _zoom;
+                                node.position += details.delta;
                               });
                             },
                             onPanEnd: (_) {
@@ -633,33 +575,8 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
                           ),
                         );
                       }),
-                      Positioned(
-                        bottom: 12,
-                        right: 12,
-                        child: Column(
-                          children: [
-                            _zoomButton(Icons.add, () {
-                              setState(() =>
-                                  _zoom = (_zoom + 0.1).clamp(0.4, 2.0));
-                            }),
-                            const SizedBox(height: 4),
-                            _zoomButton(Icons.remove, () {
-                              setState(() =>
-                                  _zoom = (_zoom - 0.1).clamp(0.4, 2.0));
-                            }),
-                            const SizedBox(height: 4),
-                            _zoomButton(Icons.center_focus_strong, () {
-                              setState(() {
-                                _panOffset = Offset.zero;
-                                _zoom = 1.0;
-                              });
-                            }),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
-                ),
                 ),
     );
   }
@@ -740,27 +657,6 @@ class _DecisionGraphScreenState extends State<DecisionGraphScreen>
     );
   }
 
-  Widget _zoomButton(IconData icon, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 4,
-            ),
-          ],
-        ),
-        child: Icon(icon, size: 16, color: AppColors.textSecondary),
-      ),
-    );
-  }
 }
 
 class _DocumentPreviewDialog extends StatefulWidget {

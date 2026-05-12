@@ -518,53 +518,60 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
 
     setState(() => _isSubmitting = true);
 
-    final String meetingTitle = _meetingTitleController.text.trim().isNotEmpty
-        ? _meetingTitleController.text.trim()
-        : _selectedCouncilType;
+    try {
+      final String meetingTitle = _meetingTitleController.text.trim().isNotEmpty
+          ? _meetingTitleController.text.trim()
+          : _selectedCouncilType;
 
-    const Map<String, int> _typeToInt = {
-      'Applies': 0,
-      'Change': 1,
-      'Continue': 2,
-    };
+      const Map<String, int> _typeToInt = {
+        'Applies': 0,
+        'Change': 1,
+        'Continue': 2,
+      };
 
-    final Meeting meeting = Meeting(
-      title: meetingTitle,
-      meetingDate: _selectedMeetingDate ?? DateTime.now(),
-      meetingContent: _decisionTextController.text.trim(),
-      status: status,
-      requiredSignatures: _selectedSignatories
-          .map((Map<String, dynamic> u) => u['id'] as int)
-          .toList(),
-      recipients: _selectedRecipients
-          .map((Map<String, dynamic> u) => u['id'] as int)
-          .toList(),
-      sessionNumber: _sessionNumberController.text.trim(),
-      decisionNumber: _decisionNumberController.text.trim(),
-      councilType: _selectedCouncilType,
-      relationships: _addedConnections
-          .map((_AddedConnection c) => <String, dynamic>{
-                'relatedMeetingId': c.meetingId,
-                'type': _typeToInt[c.relationshipType] ?? 0,
-              })
-          .toList(),
-      signatoryName: _signatoryNameController.text.trim(),
-      signatoryTitle: _signatoryTitleController.text.trim(),
-    );
+      final Meeting meeting = Meeting(
+        title: meetingTitle,
+        meetingDate: _selectedMeetingDate ?? DateTime.now(),
+        meetingContent: _decisionTextController.text.trim(),
+        status: status,
+        requiredSignatures: _selectedSignatories
+            .map((Map<String, dynamic> u) => u['id'] as int)
+            .toList(),
+        recipients: _selectedRecipients
+            .map((Map<String, dynamic> u) => u['id'] as int)
+            .toList(),
+        sessionNumber: _sessionNumberController.text.trim(),
+        decisionNumber: _decisionNumberController.text.trim(),
+        councilType: _selectedCouncilType,
+        relationships: _addedConnections
+            .map((_AddedConnection c) => <String, dynamic>{
+                  'relatedMeetingId': c.meetingId,
+                  'type': _typeToInt[c.relationshipType] ?? 0,
+                })
+            .toList(),
+        signatoryName: _signatoryNameController.text.trim(),
+        signatoryTitle: _signatoryTitleController.text.trim(),
+      );
 
-    final bool ok = await _meetingService.createMeeting(
-      meeting,
-      editedMeetingId: widget.editMeeting?.id,
-    );
+      final bool ok = await _meetingService.createMeeting(
+        meeting,
+        editedMeetingId: widget.editMeeting?.id,
+      );
 
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
 
-    if (ok) {
-      await _clearDraft();
-      _showSnack('تم إرسال الملخص للتوقيع.');
-      context.go('/');
-    } else {
+      if (ok) {
+        await _clearDraft();
+        _showSnack('تم إرسال الملخص للتوقيع.');
+        context.go('/');
+      } else {
+        _showSnack('فشل إنشاء الاجتماع. يرجى المحاولة مرة أخرى.');
+      }
+    } catch (e) {
+      debugPrint('Meeting submit error: $e');
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
       _showSnack('فشل إنشاء الاجتماع. يرجى المحاولة مرة أخرى.');
     }
   }

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../constants/api_constants.dart';
 import '../constants/app_theme.dart';
+import '../models/meeting.dart';
 import '../services/auth_service.dart';
+import '../services/meeting_service.dart';
 
 class AppHeader extends StatefulWidget {
   final bool showMenuButton;
@@ -15,11 +19,13 @@ class AppHeader extends StatefulWidget {
 class _AppHeaderState extends State<AppHeader> {
   String _userName = '';
   String _roleName = '';
+  List<Meeting> _unsignedMeetings = [];
 
   @override
   void initState() {
     super.initState();
     _loadUserInfo();
+    _loadUnsignedMeetings();
   }
 
   Future<void> _loadUserInfo() async {
@@ -30,6 +36,18 @@ class _AppHeaderState extends State<AppHeader> {
       setState(() {
         _userName = name ?? 'User';
         _roleName = _roleLabel(roleId);
+      });
+    }
+  }
+
+  Future<void> _loadUnsignedMeetings() async {
+    final List<Meeting> pending = await MeetingService().getPendingSignMeetings();
+    if (mounted) {
+      setState(() {
+        _unsignedMeetings = pending
+            .where((Meeting m) =>
+                m.signatureStatus == MeetingStatus.pendingApproval)
+            .toList();
       });
     }
   }
@@ -97,26 +115,111 @@ class _AppHeaderState extends State<AppHeader> {
           ],
           const Spacer(),
           // Notification bell
-          IconButton(
-            onPressed: () {},
+          PopupMenuButton<int>(
+            offset: const Offset(0, 44),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            constraints: const BoxConstraints(maxWidth: 320),
             icon: Stack(
+              clipBehavior: Clip.none,
               children: [
                 const Icon(Icons.notifications_outlined,
                     size: 20, color: AppColors.textSecondary),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.statusDraft,
-                      shape: BoxShape.circle,
+                if (_unsignedMeetings.isNotEmpty)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        color: AppColors.statusDraft,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '${_unsignedMeetings.length}',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            itemBuilder: (BuildContext context) {
+              if (_unsignedMeetings.isEmpty) {
+                return [
+                  const PopupMenuItem<int>(
+                    enabled: false,
+                    child: Text('No meetings awaiting your signature',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                ];
+              }
+              return [
+                const PopupMenuItem<int>(
+                  enabled: false,
+                  child: Text(
+                    'Awaiting Your Signature',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
-              ],
-            ),
+                ..._unsignedMeetings.map((Meeting m) {
+                  return PopupMenuItem<int>(
+                    value: m.id,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.statusPending
+                                .withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.draw_outlined,
+                              size: 16, color: AppColors.statusPending),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                m.title,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                DateFormat('MMM dd, yyyy')
+                                    .format(m.meetingDate),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ];
+            },
+            onSelected: (int meetingId) {
+              context.go('/review');
+            },
           ),
           const SizedBox(width: 8),
           // User avatar & name

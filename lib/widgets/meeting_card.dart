@@ -9,6 +9,8 @@ class MeetingCard extends StatefulWidget {
   final DateTime? date;
   final int status;
   final double? progress;
+  final int? signedCount;
+  final int? totalCount;
   final VoidCallback? onTap;
   final bool animateProgress;
 
@@ -19,6 +21,8 @@ class MeetingCard extends StatefulWidget {
     this.date,
     this.status = 0,
     this.progress,
+    this.signedCount,
+    this.totalCount,
     this.onTap,
     this.animateProgress = true,
   });
@@ -99,6 +103,29 @@ class _MeetingCardState extends State<MeetingCard>
             ],
             if (widget.progress != null) ...[
               const SizedBox(height: 10),
+              if (widget.signedCount != null && widget.totalCount != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${widget.signedCount} of ${widget.totalCount} signed',
+                        style: AppTextStyles.caption,
+                      ),
+                      Text(
+                        '${(widget.progress! * 100).round()}%',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: widget.progress! >= 1.0
+                              ? AppColors.statusApproved
+                              : AppColors.primaryBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               AnimatedBuilder(
                 animation: _progressController,
                 builder: (BuildContext context, Widget? child) {

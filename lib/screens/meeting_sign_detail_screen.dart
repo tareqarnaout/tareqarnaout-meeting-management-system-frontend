@@ -102,8 +102,7 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-      await _fetchMeeting();
-      if (mounted) setState(() {});
+      if (mounted) context.go('/');
     } else if (statusCode == 409) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -527,7 +526,29 @@ class _MeetingSignDetailScreenState extends State<MeetingSignDetailScreen> {
                       fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary)),
               const SizedBox(height: 16),
-              if (hasSigned)
+              if (_meeting!.status == MeetingStatus.editRequest)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('تم طلب التعديل',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.statusPending.withValues(alpha: 0.15),
+                      foregroundColor: AppColors.statusPending,
+                      disabledBackgroundColor:
+                          AppColors.statusPending.withValues(alpha: 0.15),
+                      disabledForegroundColor: AppColors.statusPending,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                )
+              else if (hasSigned)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(

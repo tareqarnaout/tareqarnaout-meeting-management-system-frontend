@@ -414,18 +414,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
               )
             else
-              // Table
               Container(
                 decoration: AppDecorations.cardWithBorder,
                 clipBehavior: Clip.antiAlias,
                 child: isMobile
-                    ? SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(minWidth: 500),
-                          child: _buildTableContent(users),
-                        ),
-                      )
+                    ? _buildMobileList(users)
                     : _buildTableContent(users),
               ),
           ],
@@ -433,6 +426,84 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ),
     );
       },
+    );
+  }
+
+  Widget _buildMobileList(List<AppUser> users) {
+    if (users.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(40),
+        child: Center(
+          child: Text('No users found',
+              style: TextStyle(color: AppColors.textMuted)),
+        ),
+      );
+    }
+    return Column(
+      children: users.map((AppUser user) => _buildMobileUserCard(user)).toList(),
+    );
+  }
+
+  Widget _buildMobileUserCard(AppUser user) {
+    final String initials = user.name.isNotEmpty
+        ? user.name
+            .split(' ')
+            .where((String s) => s.isNotEmpty)
+            .take(2)
+            .map((String s) => s[0].toUpperCase())
+            .join()
+        : '?';
+    final String roleName = UserRole.label(user.roleId);
+
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: _avatarColor(user.roleId),
+            child: Text(
+              initials,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  user.email,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _RoleBadge(role: roleName),
+        ],
+      ),
     );
   }
 

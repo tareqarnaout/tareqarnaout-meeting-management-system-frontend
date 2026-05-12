@@ -17,7 +17,8 @@
       "Bash(unzip -o amiri.zip -d amiri_extract)",
       "WebSearch",
       "WebFetch(domain:alphacephei.com)",
-      "WebFetch(domain:pub.dev)"
+      "WebFetch(domain:pub.dev)",
+      "Bash(dart analyze *)"
     ]
   }
 }

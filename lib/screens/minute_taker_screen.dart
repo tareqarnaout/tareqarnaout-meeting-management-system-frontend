@@ -824,37 +824,61 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _speakers.contains(_selectedSpeaker)
-                      ? _selectedSpeaker
-                      : (_speakers.isNotEmpty ? _speakers.first : null),
-                  isExpanded: true,
-                  hint: Text('Speaker', style: AppTextStyles.bodySmall),
-                  items: _speakers
-                      .map((String s) => DropdownMenuItem<String>(
-                            value: s,
-                            child: Text(s,
-                                overflow: TextOverflow.ellipsis, maxLines: 1),
-                          ))
-                      .toList(),
-                  onChanged: (String? value) {
-                    if (value == null) return;
-                    setState(() => _selectedSpeaker = value);
-                  },
-                  decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppColors.border),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _speakers.contains(_selectedSpeaker)
+                            ? _selectedSpeaker
+                            : (_speakers.isNotEmpty ? _speakers.first : null),
+                        isExpanded: true,
+                        hint: Text('Speaker', style: AppTextStyles.bodySmall),
+                        items: _speakers
+                            .map((String s) => DropdownMenuItem<String>(
+                                  value: s,
+                                  child: Text(s,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1),
+                                ))
+                            .toList(),
+                        onChanged: (String? value) {
+                          if (value == null) return;
+                          setState(() => _selectedSpeaker = value);
+                        },
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AppColors.border),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: AppColors.border),
+                          ),
+                          filled: true,
+                          fillColor: AppColors.surfaceMuted,
+                        ),
+                      ),
                     ),
-                    enabledBorder: OutlineInputBorder(
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: _showAttendeeSearch,
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppColors.border),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryTeal,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.person_add_outlined,
+                            size: 20, color: Colors.white),
+                      ),
                     ),
-                    filled: true,
-                    fillColor: AppColors.surfaceMuted,
-                  ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Row(

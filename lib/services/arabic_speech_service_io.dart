@@ -7,6 +7,10 @@ typedef SpeechStatusCallback = void Function(bool isListening);
 typedef SpeechErrorCallback = void Function(String error);
 
 class ArabicSpeechService {
+  static final ArabicSpeechService _instance = ArabicSpeechService._internal();
+  factory ArabicSpeechService() => _instance;
+  ArabicSpeechService._internal();
+
   static const String _modelUrl =
       'https://alphacephei.com/vosk/models/vosk-model-ar-mgb2-0.4.zip';
   static const int _sampleRate = 16000;
@@ -17,6 +21,7 @@ class ArabicSpeechService {
   bool _isAvailable = false;
   bool _isListening = false;
   bool _isDownloadingModel = false;
+  bool _initialized = false;
 
   Model? _model;
   Recognizer? _recognizer;
@@ -34,6 +39,7 @@ class ArabicSpeechService {
   bool get isDownloadingModel => _isDownloadingModel;
 
   Future<bool> initialize() async {
+    if (_initialized) return _isAvailable;
     try {
       _isDownloadingModel = true;
       final String modelPath = await _modelLoader.loadFromNetwork(_modelUrl);
@@ -50,6 +56,7 @@ class ArabicSpeechService {
       _isDownloadingModel = false;
       _isAvailable = false;
     }
+    _initialized = _isAvailable;
     return _isAvailable;
   }
 

@@ -87,7 +87,9 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
     _timer?.cancel();
     _statementController.dispose();
     _recorder.dispose();
-    _speechService.dispose();
+    // Don't dispose the singleton speech service — just stop listening so the
+    // loaded model survives screen navigation and won't be re-downloaded.
+    _speechService.stopListening();
     super.dispose();
   }
 

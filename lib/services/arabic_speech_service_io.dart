@@ -1,93 +1,56 @@
-// Native (iOS / Android) implementation using the speech_to_text package.
 import 'dart:async';
-import 'package:speech_to_text/speech_recognition_error.dart' as stt_error;
-import 'package:speech_to_text/speech_recognition_result.dart' as stt_result;
-import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'dart:convert';
+import 'package:vosk_flutter_service/vosk_flutter.dart';
 
 typedef SpeechResultCallback = void Function(String text, bool isFinal);
 typedef SpeechStatusCallback = void Function(bool isListening);
 typedef SpeechErrorCallback = void Function(String error);
 
 class ArabicSpeechService {
-  final stt.SpeechToText _speech = stt.SpeechToText();
+  static const String _modelUrl =
+      'https://alphacephei.com/vosk/models/vosk-model-ar-mgb2-0.4.zip';
+  static const int _sampleRate = 16000;
+
+  final VoskFlutterPlugin _vosk = VoskFlutterPlugin.instance();
+  final ModelLoader _modelLoader = ModelLoader();
+
   bool _isAvailable = false;
   bool _isListening = false;
-  bool _wantListening = false;
-  String? _localeId;
+  bool _isDownloadingModel = false;
 
-  bool get isAvailable => _isAvailable;
-  bool get isListening => _isListening;
+  Model? _model;
+  Recognizer? _recognizer;
+  SpeechService? _speechService;
+
+  StreamSubscription<String>? _partialSub;
+  StreamSubscription<String>? _resultSub;
 
   SpeechResultCallback? _onResult;
   SpeechStatusCallback? _onStatus;
   SpeechErrorCallback? _onError;
 
-  // Ordered by preference — most widely supported Arabic locales first.
-  static const List<String> _arabicPrefixes = <String>[
-    'ar-SA', 'ar-EG', 'ar-AE', 'ar-JO', 'ar-KW', 'ar-QA', 'ar',
-  ];
+  bool get isAvailable => _isAvailable;
+  bool get isListening => _isListening;
+  bool get isDownloadingModel => _isDownloadingModel;
 
   Future<bool> initialize() async {
     try {
-      _isAvailable = await _speech.initialize(
-        onStatus: _handleStatus,
-        onError: _handleError,
+      _isDownloadingModel = true;
+      final String modelPath = await _modelLoader.loadFromNetwork(_modelUrl);
+      _isDownloadingModel = false;
+
+      _model = await _vosk.createModel(modelPath);
+      _recognizer = await _vosk.createRecognizer(
+        model: _model!,
+        sampleRate: _sampleRate,
       );
-      if (!_isAvailable) {
-        await Future<void>.delayed(const Duration(milliseconds: 500));
-        _isAvailable = await _speech.initialize(
-          onStatus: _handleStatus,
-          onError: _handleError,
-        );
-      }
-      if (_isAvailable) {
-        final List<stt.LocaleName> locales = await _speech.locales();
-        _localeId = _findArabicLocale(locales);
-        if (_localeId == null) {
-          _isAvailable = false;
-        }
-      }
+      _speechService = await _vosk.initSpeechService(_recognizer!);
+      _isAvailable = true;
     } catch (_) {
+      _isDownloadingModel = false;
       _isAvailable = false;
     }
     return _isAvailable;
-  }
-
-  static String _normalizeLocaleId(String id) =>
-      id.toLowerCase().replaceAll('_', '-');
-
-  String? _findArabicLocale(List<stt.LocaleName> locales) {
-    for (final String prefix in _arabicPrefixes) {
-      final String normalizedPrefix = _normalizeLocaleId(prefix);
-      final stt.LocaleName? match = locales.cast<stt.LocaleName?>().firstWhere(
-        (stt.LocaleName? l) =>
-            l != null &&
-            _normalizeLocaleId(l.localeId).startsWith(normalizedPrefix),
-        orElse: () => null,
-      );
-      if (match != null) return match.localeId;
-    }
-    return null;
-  }
-
-  void _handleStatus(String status) {
-    final bool listening = status == 'listening';
-    _isListening = listening;
-    _onStatus?.call(listening);
-    // Restart if the session ended naturally while we still want to listen.
-    if (!listening && _wantListening) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (_wantListening && !_speech.isListening) _startSession();
-      });
-    }
-  }
-
-  void _handleError(stt_error.SpeechRecognitionError error) {
-    // Timeouts and no-match are normal in dictation mode — ignore them.
-    if (error.errorMsg != 'error_speech_timeout' &&
-        error.errorMsg != 'error_no_match') {
-      _onError?.call(error.errorMsg);
-    }
   }
 
   Future<void> startListening({
@@ -95,59 +58,82 @@ class ArabicSpeechService {
     SpeechStatusCallback? onStatus,
     SpeechErrorCallback? onError,
   }) async {
-    if (!_isAvailable) {
+    if (!_isAvailable || _speechService == null) {
       onError?.call(
-        'Arabic speech recognition is not available on this device. '
-        'Install an Arabic language pack in your device settings.',
+        'Arabic speech recognition is not available. '
+        'Please check your internet connection and try again.',
       );
       return;
     }
+
     _onResult = onResult;
     _onStatus = onStatus;
     _onError = onError;
-    _wantListening = true;
-    await _startSession();
+
+    _partialSub?.cancel();
+    _resultSub?.cancel();
+
+    _partialSub = _speechService!.onPartial().listen((String json) {
+      final String text = _extractText(json, key: 'partial');
+      if (text.isNotEmpty) {
+        _onResult?.call(text, false);
+      }
+    });
+
+    _resultSub = _speechService!.onResult().listen((String json) {
+      final String text = _extractText(json, key: 'text');
+      if (text.isNotEmpty) {
+        _onResult?.call(text, true);
+      }
+    });
+
+    try {
+      await _speechService!.start();
+      _isListening = true;
+      _onStatus?.call(true);
+    } catch (e) {
+      _isListening = false;
+      _onError?.call('Failed to start speech recognition: $e');
+    }
   }
 
-  Future<void> _startSession() async {
-    if (!_wantListening || !_isAvailable || _speech.isListening) return;
-
-    final bool started = await _speech.listen(
-      localeId: _localeId,
-      listenFor: const Duration(minutes: 10),
-      listenOptions: stt.SpeechListenOptions(
-        partialResults: true,
-        listenMode: stt.ListenMode.dictation,
-        cancelOnError: false,
-      ),
-      onResult: (stt_result.SpeechRecognitionResult result) {
-        if (result.recognizedWords.isNotEmpty) {
-          _onResult?.call(result.recognizedWords, result.finalResult);
-        }
-      },
-    );
-
-    _isListening = started;
-    _onStatus?.call(started);
+  static String _extractText(String json, {required String key}) {
+    try {
+      final Map<String, dynamic> map =
+          jsonDecode(json) as Map<String, dynamic>;
+      return (map[key] as String?)?.trim() ?? '';
+    } catch (_) {
+      return '';
+    }
   }
 
   Future<void> stopListening() async {
-    _wantListening = false;
     _onResult = null;
     _onStatus = null;
     _onError = null;
-    if (_speech.isListening) {
-      await _speech.stop();
+    await _partialSub?.cancel();
+    await _resultSub?.cancel();
+    _partialSub = null;
+    _resultSub = null;
+    if (_isListening) {
+      try {
+        await _speechService?.stop();
+      } catch (_) {}
     }
     _isListening = false;
   }
 
   void dispose() {
-    _wantListening = false;
-    _isListening = false;
     _onResult = null;
     _onStatus = null;
     _onError = null;
-    _speech.cancel();
+    _partialSub?.cancel();
+    _resultSub?.cancel();
+    _partialSub = null;
+    _resultSub = null;
+    _isListening = false;
+    try {
+      _speechService?.stop();
+    } catch (_) {}
   }
 }

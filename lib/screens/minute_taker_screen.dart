@@ -102,6 +102,9 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
         _sttAvailable = available;
         _sttInitializing = false;
       });
+      if (!available && mounted) {
+        _showError('Failed to initialize Arabic speech model.');
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -502,6 +505,18 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  String _sttLabel() {
+    if (_sttInitializing) {
+      return _speechService.isDownloadingModel
+          ? 'Downloading Arabic Model...'
+          : 'Initializing STT...';
+    }
+    if (_sttAvailable) {
+      return _sttListening ? 'Arabic STT On' : 'Arabic STT Off';
+    }
+    return 'Arabic STT Unavailable';
+  }
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -559,6 +574,7 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
           },
           sttAvailable: _sttAvailable,
           sttListening: _sttListening,
+          sttLabel: _sttLabel(),
           liveTranscript: _liveTranscript,
           controller: _statementController,
           onAdd: _addStatement,
@@ -723,27 +739,13 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
                             ),
                             const SizedBox(height: 6),
                             GestureDetector(
-                              onTap: _sttAvailable
+                              onTap: _sttAvailable || _sttInitializing
                                   ? null
                                   : () {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Install an Arabic language pack in your device settings '
-                                            '(Settings > System > Languages & Input > Speech) to enable Arabic speech-to-text.',
-                                          ),
-                                          behavior: SnackBarBehavior.floating,
-                                          duration: Duration(seconds: 5),
-                                        ),
-                                      );
+                                      _initializeSpeech();
                                     },
                               child: MinuteTag(
-                                label: _sttAvailable
-                                    ? (_sttListening
-                                        ? 'Arabic STT On'
-                                        : 'Arabic STT Off')
-                                    : 'Arabic STT Unavailable',
+                                label: _sttLabel(),
                                 backgroundColor: _sttAvailable
                                     ? AppColors.surfaceMuted
                                     : AppColors.statusDraft
@@ -1233,6 +1235,7 @@ class _CenterColumn extends StatelessWidget {
   final ValueChanged<String?> onSpeakerChanged;
   final bool sttAvailable;
   final bool sttListening;
+  final String sttLabel;
   final String liveTranscript;
   final TextEditingController controller;
   final VoidCallback onAdd;
@@ -1246,6 +1249,7 @@ class _CenterColumn extends StatelessWidget {
     required this.onSpeakerChanged,
     required this.sttAvailable,
     required this.sttListening,
+    required this.sttLabel,
     required this.liveTranscript,
     required this.controller,
     required this.onAdd,
@@ -1269,32 +1273,14 @@ class _CenterColumn extends StatelessWidget {
                 backgroundColor: AppColors.tagGreenBg,
                 textColor: AppColors.primaryTeal,
               ),
-              GestureDetector(
-                onTap: sttAvailable
-                    ? null
-                    : () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Install an Arabic language pack in your device settings '
-                              '(Settings > System > Languages & Input > Speech) to enable Arabic speech-to-text.',
-                            ),
-                            behavior: SnackBarBehavior.floating,
-                            duration: Duration(seconds: 5),
-                          ),
-                        );
-                      },
-                child: MinuteTag(
-                  label: sttAvailable
-                      ? (sttListening ? 'Arabic STT On' : 'Arabic STT Off')
-                      : 'Arabic STT Unavailable',
-                  backgroundColor: sttAvailable
-                      ? AppColors.surfaceMuted
-                      : AppColors.statusDraft.withValues(alpha: 0.1),
-                  textColor: sttAvailable
-                      ? AppColors.textSecondary
-                      : AppColors.statusDraft,
-                ),
+              MinuteTag(
+                label: sttLabel,
+                backgroundColor: sttAvailable
+                    ? AppColors.surfaceMuted
+                    : AppColors.statusDraft.withValues(alpha: 0.1),
+                textColor: sttAvailable
+                    ? AppColors.textSecondary
+                    : AppColors.statusDraft,
               ),
             ],
           ),

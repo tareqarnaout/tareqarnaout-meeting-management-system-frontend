@@ -70,6 +70,7 @@ class ArabicSpeechService {
 
   bool get isAvailable => _isAvailable;
   bool get isListening => _isListening;
+  bool get isDownloadingModel => false;
 
   SpeechResultCallback? _onResult;
   SpeechStatusCallback? _onStatus;

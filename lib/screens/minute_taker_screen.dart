@@ -11,6 +11,8 @@ import '../services/audio_recorder_service.dart';
 import '../services/arabic_speech_service.dart';
 import '../services/auth_service.dart';
 import '../services/meeting_notes_service.dart';
+import '../services/user_service.dart';
+import '../models/user.dart';
 import '../widgets/minute_taker_widgets.dart';
 
 class MinuteTakerScreen extends StatefulWidget {
@@ -29,6 +31,7 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
   final ArabicSpeechService _speechService = ArabicSpeechService();
   final MeetingNotesService _notesService = MeetingNotesService();
   final AuthService _authService = AuthService();
+  final UserService _userService = UserService();
   final TextEditingController _statementController = TextEditingController();
 
   // ── Meeting state ─────────────────────────────────────────────────────────
@@ -55,6 +58,9 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
   String _selectedSpeaker = '';
   String _selectedDepartment = 'هندسة البرمجيات';
   String _selectedMeetingType = 'مجلس القسم';
+  List<Attendee> _allUsers = <Attendee>[];
+  List<AppUser> _secretaries = <AppUser>[];
+  int? _selectedSecretaryId;
 
   static const List<String> _departments = <String>[
     'هندسة البرمجيات',
@@ -78,8 +84,8 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedSpeaker = _attendees.isNotEmpty ? _attendees.first.name : '';
     _initializeSpeech();
+    _loadUsers();
   }
 
   @override
@@ -94,6 +100,29 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
   }
 
   // ── STT ───────────────────────────────────────────────────────────────────
+
+  Future<void> _loadUsers() async {
+    try {
+      final List<AppUser> users = await _userService.getUsers();
+      if (!mounted) return;
+      final List<Attendee> allUsers = users
+          .map((AppUser u) => Attendee(
+                id: u.id,
+                initials: Attendee.initialsFrom(u.name),
+                name: u.name,
+                role: UserRole.label(u.roleId),
+                isPresent: false,
+              ))
+          .toList();
+      final List<AppUser> secretaries = users
+          .where((AppUser u) => u.roleId == UserRole.secretary)
+          .toList();
+      setState(() {
+        _allUsers = allUsers;
+        _secretaries = secretaries;
+      });
+    } catch (_) {}
+  }
 
   Future<void> _initializeSpeech() async {
     setState(() => _sttInitializing = true);
@@ -558,9 +587,10 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
         final _LeftColumn leftCol = _LeftColumn(
           sectionGap: sectionGap,
           attendees: _attendees,
+          allUsers: _allUsers,
           agenda: _agenda,
           onAttendeeToggle: _toggleAttendeePresence,
-          onAddAttendee: _showAttendeeSearch,
+          onAddAttendee: _addAttendee,
           onAddAgenda: _addAgendaItem,
           onRemoveAgenda: _removeAgendaItem,
         );
@@ -598,6 +628,11 @@ class _MinuteTakerScreenState extends State<MinuteTakerScreen> {
           selectedMeetingType: _selectedMeetingType,
           onMeetingTypeChanged: (String? value) {
             if (value != null) setState(() => _selectedMeetingType = value);
+          },
+          secretaries: _secretaries,
+          selectedSecretaryId: _selectedSecretaryId,
+          onSecretaryChanged: (AppUser? s) {
+            setState(() => _selectedSecretaryId = s?.id);
           },
         );
 
@@ -1122,15 +1157,17 @@ class _MinuteHeader extends StatelessWidget {
 class _LeftColumn extends StatefulWidget {
   final double sectionGap;
   final List<Attendee> attendees;
+  final List<Attendee> allUsers;
   final List<AgendaItem> agenda;
   final ValueChanged<Attendee> onAttendeeToggle;
-  final VoidCallback onAddAttendee;
+  final ValueChanged<Attendee> onAddAttendee;
   final ValueChanged<String> onAddAgenda;
   final ValueChanged<int> onRemoveAgenda;
 
   const _LeftColumn({
     required this.sectionGap,
     required this.attendees,
+    required this.allUsers,
     required this.agenda,
     required this.onAttendeeToggle,
     required this.onAddAttendee,
@@ -1144,10 +1181,25 @@ class _LeftColumn extends StatefulWidget {
 
 class _LeftColumnState extends State<_LeftColumn> {
   final TextEditingController _agendaController = TextEditingController();
+  final TextEditingController _attendeeSearchController = TextEditingController();
+  String _attendeeQuery = '';
+
+  List<Attendee> get _filteredUsers {
+    final String q = _attendeeQuery.toLowerCase();
+    if (q.isEmpty) return <Attendee>[];
+    final Set<String> existing =
+        widget.attendees.map((Attendee a) => a.name).toSet();
+    return widget.allUsers
+        .where((Attendee a) =>
+            !existing.contains(a.name) &&
+            a.name.toLowerCase().contains(q))
+        .toList();
+  }
 
   @override
   void dispose() {
     _agendaController.dispose();
+    _attendeeSearchController.dispose();
     super.dispose();
   }
 
@@ -1166,28 +1218,100 @@ class _LeftColumnState extends State<_LeftColumn> {
       children: [
         MinuteSectionCard(
           title: 'Attendance',
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              MinuteTag(
-                label: '$presentCount/${widget.attendees.length}',
-                backgroundColor: AppColors.surfaceMuted,
-                textColor: AppColors.textPrimary,
-              ),
-              const SizedBox(width: 4),
-              IconButton(
-                onPressed: widget.onAddAttendee,
-                icon: const Icon(Icons.person_add_outlined, size: 18),
-                color: AppColors.primaryTeal,
-                padding: EdgeInsets.zero,
-                tooltip: 'Add attendee',
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
+          trailing: MinuteTag(
+            label: '$presentCount/${widget.attendees.length}',
+            backgroundColor: AppColors.surfaceMuted,
+            textColor: AppColors.textPrimary,
           ),
-          child: AttendanceList(
-            attendees: widget.attendees,
-            onAttendeeToggle: widget.onAttendeeToggle,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AttendanceList(
+                attendees: widget.attendees,
+                onAttendeeToggle: widget.onAttendeeToggle,
+              ),
+              TextField(
+                controller: _attendeeSearchController,
+                onChanged: (String v) => setState(() => _attendeeQuery = v),
+                decoration: InputDecoration(
+                  hintText: 'Search to add attendee...',
+                  hintStyle: AppTextStyles.bodySmall,
+                  prefixIcon: const Icon(Icons.search,
+                      size: 18, color: AppColors.textMuted),
+                  suffixIcon: _attendeeQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () => setState(() {
+                            _attendeeQuery = '';
+                            _attendeeSearchController.clear();
+                          }),
+                        )
+                      : null,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.surfaceMuted,
+                ),
+              ),
+              if (_filteredUsers.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 180),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    itemCount: _filteredUsers.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: AppColors.border),
+                    itemBuilder: (BuildContext context, int index) {
+                      final Attendee a = _filteredUsers[index];
+                      return ListTile(
+                        dense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 12),
+                        leading: CircleAvatar(
+                          radius: 14,
+                          backgroundColor:
+                              AppColors.primaryTeal.withValues(alpha: 0.12),
+                          child: Text(
+                            a.initials,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primaryTeal,
+                            ),
+                          ),
+                        ),
+                        title: Text(a.name, style: AppTextStyles.bodySmall),
+                        subtitle: Text(a.role, style: AppTextStyles.caption),
+                        trailing: const Icon(Icons.person_add_outlined,
+                            size: 16, color: AppColors.primaryTeal),
+                        onTap: () {
+                          widget.onAddAttendee(a);
+                          setState(() {
+                            _attendeeQuery = '';
+                            _attendeeSearchController.clear();
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         SizedBox(height: widget.sectionGap),
@@ -1378,7 +1502,7 @@ class _CenterColumn extends StatelessWidget {
 
 // ── Right column ───────────────────────────────────────────────────────────
 
-class _RightColumn extends StatelessWidget {
+class _RightColumn extends StatefulWidget {
   final double sectionGap;
   final List<HandoffStat> stats;
   final VoidCallback onPreview;
@@ -1390,6 +1514,9 @@ class _RightColumn extends StatelessWidget {
   final List<String> meetingTypes;
   final String selectedMeetingType;
   final ValueChanged<String?> onMeetingTypeChanged;
+  final List<AppUser> secretaries;
+  final int? selectedSecretaryId;
+  final ValueChanged<AppUser?> onSecretaryChanged;
 
   const _RightColumn({
     required this.sectionGap,
@@ -1402,8 +1529,59 @@ class _RightColumn extends StatelessWidget {
     required this.meetingTypes,
     required this.selectedMeetingType,
     required this.onMeetingTypeChanged,
+    required this.secretaries,
+    required this.onSecretaryChanged,
+    this.selectedSecretaryId,
     this.isSending = false,
   });
+
+  @override
+  State<_RightColumn> createState() => _RightColumnState();
+}
+
+class _RightColumnState extends State<_RightColumn> {
+  final TextEditingController _secretaryController = TextEditingController();
+  final FocusNode _secretaryFocus = FocusNode();
+  bool _showSecretaryResults = false;
+
+  List<AppUser> get _filteredSecretaries {
+    final String q = _secretaryController.text.toLowerCase();
+    if (q.isEmpty) return widget.secretaries;
+    return widget.secretaries
+        .where((AppUser s) => s.name.toLowerCase().contains(q))
+        .toList();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _secretaryFocus.addListener(() {
+      if (mounted) setState(() => _showSecretaryResults = _secretaryFocus.hasFocus);
+    });
+  }
+
+  @override
+  void didUpdateWidget(_RightColumn oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When the secretaries list first loads, pre-fill with the first entry.
+    // Defer the parent setState call to after the current build frame.
+    if (oldWidget.secretaries.isEmpty &&
+        widget.secretaries.isNotEmpty &&
+        _secretaryController.text.isEmpty) {
+      final AppUser first = widget.secretaries.first;
+      _secretaryController.text = first.name;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onSecretaryChanged(first);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _secretaryController.dispose();
+    _secretaryFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1420,12 +1598,12 @@ class _RightColumn extends StatelessWidget {
                 style: AppTextStyles.bodySmall,
               ),
               const SizedBox(height: 14),
-              HandoffStats(stats: stats),
+              HandoffStats(stats: widget.stats),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: onPreview,
+                  onPressed: widget.onPreview,
                   icon: const Icon(Icons.preview_outlined, size: 16),
                   label: Text('Preview Minutes', style: AppTextStyles.buttonMuted),
                   style: OutlinedButton.styleFrom(
@@ -1440,9 +1618,9 @@ class _RightColumn extends StatelessWidget {
               Text('القسم', style: AppTextStyles.caption),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                initialValue: selectedDepartment,
+                initialValue: widget.selectedDepartment,
                 isExpanded: true,
-                items: departments
+                items: widget.departments
                     .map((String d) => DropdownMenuItem<String>(
                           value: d,
                           child: Text(d,
@@ -1451,7 +1629,7 @@ class _RightColumn extends StatelessWidget {
                               textDirection: TextDirection.rtl),
                         ))
                     .toList(),
-                onChanged: onDepartmentChanged,
+                onChanged: widget.onDepartmentChanged,
                 decoration: InputDecoration(
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1471,9 +1649,9 @@ class _RightColumn extends StatelessWidget {
               Text('نوع المجلس', style: AppTextStyles.caption),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                initialValue: selectedMeetingType,
+                initialValue: widget.selectedMeetingType,
                 isExpanded: true,
-                items: meetingTypes
+                items: widget.meetingTypes
                     .map((String t) => DropdownMenuItem<String>(
                           value: t,
                           child: Text(t,
@@ -1482,7 +1660,7 @@ class _RightColumn extends StatelessWidget {
                               textDirection: TextDirection.rtl),
                         ))
                     .toList(),
-                onChanged: onMeetingTypeChanged,
+                onChanged: widget.onMeetingTypeChanged,
                 decoration: InputDecoration(
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1501,14 +1679,26 @@ class _RightColumn extends StatelessWidget {
               const SizedBox(height: 14),
               Text('Secretary', style: AppTextStyles.caption),
               const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                initialValue: 'Abeer Amri',
-                items: const [
-                  DropdownMenuItem(value: 'Abeer Amri', child: Text('Abeer Amri')),
-                  DropdownMenuItem(value: 'Salma Rashid', child: Text('Salma Rashid')),
-                ],
-                onChanged: (String? value) {},
+              TextField(
+                controller: _secretaryController,
+                focusNode: _secretaryFocus,
+                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
+                  hintText: widget.secretaries.isEmpty
+                      ? 'Loading secretaries...'
+                      : 'Search secretary...',
+                  hintStyle: AppTextStyles.bodySmall,
+                  prefixIcon: const Icon(Icons.search,
+                      size: 18, color: AppColors.textMuted),
+                  suffixIcon: _secretaryController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () {
+                            setState(() => _secretaryController.clear());
+                            widget.onSecretaryChanged(null);
+                          },
+                        )
+                      : null,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   border: OutlineInputBorder(
@@ -1523,12 +1713,47 @@ class _RightColumn extends StatelessWidget {
                   fillColor: AppColors.surfaceMuted,
                 ),
               ),
+              if (_showSecretaryResults && _filteredSecretaries.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 160),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    itemCount: _filteredSecretaries.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: AppColors.border),
+                    itemBuilder: (BuildContext context, int index) {
+                      final AppUser s = _filteredSecretaries[index];
+                      return ListTile(
+                        dense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 12),
+                        title: Text(s.name, style: AppTextStyles.bodySmall),
+                        onTap: () {
+                          widget.onSecretaryChanged(s);
+                          setState(() {
+                            _secretaryController.text = s.name;
+                            _showSecretaryResults = false;
+                            _secretaryFocus.unfocus();
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: isSending ? null : onSendNotes,
-                  icon: isSending
+                  onPressed: widget.isSending ? null : widget.onSendNotes,
+                  icon: widget.isSending
                       ? const SizedBox(
                           width: 16,
                           height: 16,
@@ -1539,7 +1764,7 @@ class _RightColumn extends StatelessWidget {
                         )
                       : const Icon(Icons.send_outlined, size: 16),
                   label: Text(
-                      isSending ? 'Sending...' : 'Send Notes',
+                      widget.isSending ? 'Sending...' : 'Send Notes',
                       style: AppTextStyles.buttonSmall),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryTeal,

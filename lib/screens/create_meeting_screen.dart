@@ -363,11 +363,11 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     final String raw = _connectionIdController.text.trim();
     final int? id = int.tryParse(raw);
     if (id == null || id <= 0) {
-      _showSnack('يرجى إدخال رقم اجتماع صحيح.');
+      _showSnack('Please enter a valid meeting number.');
       return;
     }
     if (_addedConnections.any((_AddedConnection c) => c.meetingId == id)) {
-      _showSnack('هذا الاجتماع مضاف بالفعل.');
+      _showSnack('This meeting is already added.');
       return;
     }
     setState(() {
@@ -488,7 +488,7 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     );
     if (confirmed == true) {
       await _saveDraft();
-      if (mounted) _showSnack('تم حفظ المسودة محلياً.');
+      if (mounted) _showSnack('Draft saved locally.');
     }
   }
 
@@ -502,17 +502,17 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
     if (_isSubmitting) return;
 
     if (_selectedMeetingDate == null) {
-      _showSnack('يرجى تحديد تاريخ الاجتماع.');
+      _showSnack('Please select a meeting date.');
       return;
     }
     if (_decisionTextController.text.trim().isEmpty) {
-      _showSnack('يرجى إدخال نص القرار.');
+      _showSnack('Please enter the decision text.');
       return;
     }
 
     if (status == MeetingStatus.pendingApproval &&
         _selectedSignatories.isEmpty) {
-      _showSnack('أضف موقعاً واحداً على الأقل قبل الإرسال.');
+      _showSnack('Please add at least one signatory before sending.');
       return;
     }
 
@@ -562,17 +562,19 @@ class _CreateMeetingScreenState extends State<CreateMeetingScreen> {
       setState(() => _isSubmitting = false);
 
       if (ok) {
-        await _clearDraft();
-        _showSnack('تم إرسال الملخص للتوقيع.');
+        // Fire-and-forget: don't let draft cleanup block or swallow the success path.
+        _clearDraft().catchError((_) {});
+        if (!mounted) return;
+        _showSnack('Meeting submitted for signing.');
         context.go('/');
       } else {
-        _showSnack('فشل إنشاء الاجتماع. يرجى المحاولة مرة أخرى.');
+        _showSnack('Failed to create meeting. Please try again.');
       }
     } catch (e) {
       debugPrint('Meeting submit error: $e');
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      _showSnack('فشل إنشاء الاجتماع. يرجى المحاولة مرة أخرى.');
+      _showSnack('Failed to create meeting. Please try again.');
     }
   }
 

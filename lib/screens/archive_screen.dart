@@ -205,30 +205,10 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Count + Export
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Showing ${meetings.length} of ${_meetings.length} archived meetings',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.textSecondary),
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(Icons.download_outlined, size: 16),
-                      label: const Text('Export All'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textSecondary,
-                        side: const BorderSide(color: AppColors.border),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Showing ${meetings.length} of ${_meetings.length} archived meetings',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 10),
 

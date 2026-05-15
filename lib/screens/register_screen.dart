@@ -36,8 +36,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    if (password.length < 6) {
-      _showError('Password must be at least 6 characters.');
+    final RegExp passwordRegex =
+        RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$');
+    if (!passwordRegex.hasMatch(password)) {
+      _showError(
+          'Password must be at least 8 characters and contain an uppercase letter, lowercase letter, number, and special character.');
       return;
     }
 
@@ -213,7 +216,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           obscureText: _obscurePassword,
                           decoration: AppDecorations.inputDecoration(
                             '',
-                            hint: 'Enter your password',
+                            hint: 'Min 8 chars, upper, lower, number, special',
                             prefixIcon: const Icon(
                               Icons.lock_outline,
                               size: 20,

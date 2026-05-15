@@ -1,5 +1,5 @@
 class ApiConstants {
-  static const String baseUrl = 'https://post-meeting-hheug7c7hqabhmbz.canadacentral-01.azurewebsites.net/api';
+  static const String baseUrl = 'http://localhost:5065/api';
   // http://localhost:5065
 // post-meeting-hheug7c7hqabhmbz.canadacentral-01.azurewebsites.net
 }
